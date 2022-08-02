@@ -184,11 +184,12 @@ class RouterEngine:
                     }
         if kind == 'link-state'     :
             return self.neighbor_engine.link_state.to_dict()
-        if kind == 'link-state-set' :
-            copy = {}
-            for _id, _ls in self.link_state_engine.collection.items():
-                copy[_id] = _ls.to_dict()
-            return copy
+        if kind == 'link-state-set':
+            return {
+                _id: _ls.to_dict()
+                for _id, _ls in self.link_state_engine.collection.items()
+            }
+
 
         return {'notice': 'Use kind="help" to get a list of possibilities'}
 

@@ -43,7 +43,7 @@ class SSLProfile:
                 self.cache[key] = d[key]
 
     def __repr__(self):
-        return "SSLProfile(%s)" % ", ".join("%s=%s" % (k, self.cache[k]) for k in self.cache.keys())
+        return f'SSLProfile({", ".join(f"{k}={self.cache[k]}" for k in self.cache.keys())})'
 
 
 class DisplayNameService:
@@ -62,7 +62,10 @@ class DisplayNameService:
     def add(self, profile_name, profile_file_location):
         ssl_profile = SSLProfile(profile_name, profile_file_location)
         self.profile_dict[profile_name] = ssl_profile
-        self.log(dispatch.LOG_INFO, "Added profile name %s, profile file location %s to DisplayNameService" % (profile_name, profile_file_location))
+        self.log(
+            dispatch.LOG_INFO,
+            f"Added profile name {profile_name}, profile file location {profile_file_location} to DisplayNameService",
+        )
 
     def remove(self, profile_name):
         try:
@@ -81,12 +84,14 @@ class DisplayNameService:
             self.reload_all()
 
     def query(self, profile_name, user_id):
-        self.log(dispatch.LOG_TRACE, "Received query for profile name %s, user id %s to DisplayNameService" %
-                 (profile_name, user_id))
-        ssl_profile = self.profile_dict.get(profile_name)
-        if ssl_profile:
+        self.log(
+            dispatch.LOG_TRACE,
+            f"Received query for profile name {profile_name}, user id {user_id} to DisplayNameService",
+        )
+
+        if ssl_profile := self.profile_dict.get(profile_name):
             profile_cache = self.profile_dict.get(profile_name).cache
             user_name = profile_cache.get(user_id)
-            return user_name if user_name else user_id
+            return user_name or user_id
         else:
             return user_id

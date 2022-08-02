@@ -93,9 +93,7 @@ class BooleanType(Type):
         @return A python bool.
         """
         try:
-            if isinstance(value, str):
-                return self.VALUES[value.lower()]
-            return bool(value)
+            return self.VALUES[value.lower()] if isinstance(value, str) else bool(value)
         except:
             raise ValidationError("Invalid Boolean value '%r'" % value)
 
@@ -124,7 +122,7 @@ class EnumType(Type):
         @param tags: A list of string values for the enumerated type.
         """
         assert isinstance(tags, list)
-        super(EnumType, self).__init__("enum%s" % ([str(t) for t in tags]), int)
+        super(EnumType, self).__init__(f"enum{[str(t) for t in tags]}", int)
         self.tags = tags
 
     def validate(self, value):
@@ -135,12 +133,11 @@ class EnumType(Type):
         """
         if value in self.tags:
             return EnumValue(value, self.tags.index(value))
-        else:
-            try:
-                i = int(value)
-                return EnumValue(self.tags[i], i)
-            except (ValueError, IndexError):
-                pass
+        try:
+            i = int(value)
+            return EnumValue(self.tags[i], i)
+        except (ValueError, IndexError):
+            pass
         raise ValidationError("Invalid value for %s: %r" % (self.name, value))
 
     def dump(self):
@@ -196,7 +193,7 @@ def get_type(rep):
         return EnumType(rep)
     if rep in BUILTIN_TYPES:
         return BUILTIN_TYPES[rep]
-    raise ValidationError("No such schema type: %s" % rep)
+    raise ValidationError(f"No such schema type: {rep}")
 
 
 def _dump_dict(items):
@@ -278,7 +275,7 @@ class AttributeType:
         try:
             return self.atype.validate(value)
         except (TypeError, ValueError) as e:
-            raise ValidationError("%s:%s" % (str(e), sys.exc_info()[2]))
+            raise ValidationError(f"{str(e)}:{sys.exc_info()[2]}")
 
     def dump(self):
         """
@@ -305,8 +302,10 @@ class MessageDef:
         self.body = None
         if body:
             self.body = AttributeType("body", **body)
-        self.properties = dict((name, AttributeType(name, **value))
-                               for name, value in (properties or {}).items())
+        self.properties = {
+            name: AttributeType(name, **value)
+            for name, value in (properties or {}).items()
+        }
 
 
 class OperationDef:
@@ -365,20 +364,23 @@ class EntityType:
             self.deprecated_attributes = OrderedDict()
             for key, value in self.attributes.items():
                 if value.deprecation_name or value.deprecated:
-                    attr_type = AttributeType(value.deprecation_name or key,
-                                              type=value.type,
-                                              defined_in=self,
-                                              default=value.default,
-                                              required=value.required,
-                                              unique=value.unique,
-                                              hidden=value.hidden,
-                                              deprecated=True,
-                                              deprecationName=None,
-                                              value=value.value,
-                                              description="(DEPRECATED) " + value.description,
-                                              create=value.create,
-                                              update=value.update,
-                                              graph=value.graph)
+                    attr_type = AttributeType(
+                        value.deprecation_name or key,
+                        type=value.type,
+                        defined_in=self,
+                        default=value.default,
+                        required=value.required,
+                        unique=value.unique,
+                        hidden=value.hidden,
+                        deprecated=True,
+                        deprecationName=None,
+                        value=value.value,
+                        description=f"(DEPRECATED) {value.description}",
+                        create=value.create,
+                        update=value.update,
+                        graph=value.graph,
+                    )
+
                     if value.deprecation_name:
                         self.deprecated_attributes[value.deprecation_name] = attr_type
                     else:
@@ -396,8 +398,11 @@ class EntityType:
             self.referential = referential
             self._init = False      # Have not yet initialized from base and attributes.
             # Operation definitions
-            self.operation_defs = dict((name, OperationDef(name, **op))
-                                       for name, op in (operationDefs or {}).items())
+            self.operation_defs = {
+                name: OperationDef(name, **op)
+                for name, op in (operationDefs or {}).items()
+            }
+
         except Exception as exc:
             raise ValidationError("%s '%s': %s\n%s" % (type(self).__name__,
                                                        name,
@@ -466,8 +471,7 @@ class EntityType:
             for attr in self.attributes.values():
                 if attributes.get(attr.name) is None:
                     value = None
-                    deprecation_name = attr.deprecation_name
-                    if deprecation_name:
+                    if deprecation_name := attr.deprecation_name:
                         value = attributes.get(deprecation_name)
                         if value is not None:
                             if logger_available:
@@ -481,16 +485,14 @@ class EntityType:
                         attributes[attr.name] = value
                     if value is None and attr.name in attributes:
                         del attributes[attr.name]
-                else:
-                    deprecation_name = attr.deprecation_name
-                    if deprecation_name:
-                        value = attributes.get(deprecation_name)
-                        if value is not None:
-                            # Both name and deprecation name have values
-                            # For example, both dir and direction have been specified, This is
-                            # illegal. Just fail.
-                            raise ValidationError("Both '%s' and '%s' cannot be specified for entity '%s'" %
-                                                  (deprecation_name, attr.name, self.short_name))
+                elif deprecation_name := attr.deprecation_name:
+                    value = attributes.get(deprecation_name)
+                    if value is not None:
+                        # Both name and deprecation name have values
+                        # For example, both dir and direction have been specified, This is
+                        # illegal. Just fail.
+                        raise ValidationError("Both '%s' and '%s' cannot be specified for entity '%s'" %
+                                              (deprecation_name, attr.name, self.short_name))
 
             # Validate attributes.
             for name, value in attributes.items():
@@ -498,7 +500,7 @@ class EntityType:
                     value = self.schema.long_name(value)
                 attributes[name] = self.attribute(name).validate(value)
         except ValidationError as e:
-            raise ValidationError("%s: %s" % (self, e))
+            raise ValidationError(f"{self}: {e}")
 
         return attributes
 
@@ -517,8 +519,9 @@ class EntityType:
     def update_check(self, new_attributes, old_attributes):
         for a, v in new_attributes.items():
             # Its not an error to include an attribute in UPDATE if the value is not changed.
-            if not self.attribute(a).update and \
-               not (a in old_attributes and old_attributes[a] == v):
+            if not self.attribute(a).update and (
+                a not in old_attributes or old_attributes[a] != v
+            ):
                 raise ValidationError("Cannot update attribute '%s' in UPDATE" % a)
 
     def dump(self):
@@ -535,7 +538,8 @@ class EntityType:
             ('singleton', self.singleton)
         ])
 
-    def __repr__(self): return "%s(%s)" % (type(self).__name__, self.name)
+    def __repr__(self):
+        return f"{type(self).__name__}({self.name})"
 
     def __str__(self): return self.name
 
@@ -559,14 +563,10 @@ class Schema:
         @param entity_types: Map of  { entityTypeName: { singleton:, attributes:{...}}}
         @param description: Human readable description.
         """
-        if logger_available:
-            self.log_adapter = LogAdapter("AGENT")
-        else:
-            self.log_adapter = None
-
+        self.log_adapter = LogAdapter("AGENT") if logger_available else None
         if prefix:
             self.prefix = prefix.strip('.')
-            self.prefixdot = self.prefix + '.'
+            self.prefixdot = f'{self.prefix}.'
         else:
             self.prefix = self.prefixdot = ""
         self.description = description
@@ -655,8 +655,10 @@ class Schema:
             return              # Nothing to do
         for e in entities:
             if entity_type.singleton and attributes['type'] == e['type']:
-                raise ValidationError("Adding %s singleton %s when %s already exists" %
-                                      (attributes['type'], attributes, e))
+                raise ValidationError(
+                    f"Adding {attributes['type']} singleton {attributes} when {e} already exists"
+                )
+
             for a in unique:
                 try:
                     if entity_type.attributes[a.name] == a and attributes[a.name] == e[a.name]:
@@ -668,7 +670,7 @@ class Schema:
 
     def entity(self, attributes):
         """Convert an attribute map into an L{SchemaEntity}"""
-        attributes = dict((k, v) for k, v in attributes.items() if v is not None)
+        attributes = {k: v for k, v in attributes.items() if v is not None}
         return SchemaEntity(self.entity_type(attributes['type']), attributes)
 
     def entities(self, attribute_maps):
@@ -684,10 +686,11 @@ class Schema:
     def by_type(self, type):
         """Return an iterator over entity types that extend or are type.
         If type is None return all entities."""
-        if not type:
-            return self.entity_types.values()
-        else:
-            return self.filter(lambda t: t.is_a(type))
+        return (
+            self.filter(lambda t: t.is_a(type))
+            if type
+            else self.entity_types.values()
+        )
 
 
 class SchemaEntity(EntityBase):

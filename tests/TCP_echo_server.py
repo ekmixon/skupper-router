@@ -48,7 +48,7 @@ class ClientRecord:
         self.outb = b''
 
     def __repr__(self):
-        return str(self.addr) + " len(in)=" + str(len(self.inb)) + " len(out)=" + str(len(self.outb))
+        return f"{str(self.addr)} len(in)={len(self.inb)} len(out)={len(self.outb)}"
 
     def __str__(self):
         return self.__repr__()
@@ -73,11 +73,11 @@ def split_chunk_for_display(raw_bytes):
     :return: display string
     """
     CONTENT_CHUNK_SIZE = 50  # Content repeats after chunks this big - used by echo client, too
-    if len(raw_bytes) > 2 * CONTENT_CHUNK_SIZE:
-        result = repr(raw_bytes[:CONTENT_CHUNK_SIZE]) + " ... " + repr(raw_bytes[-CONTENT_CHUNK_SIZE:])
-    else:
-        result = repr(raw_bytes)
-    return result
+    return (
+        f"{repr(raw_bytes[:CONTENT_CHUNK_SIZE])} ... {repr(raw_bytes[-CONTENT_CHUNK_SIZE:])}"
+        if len(raw_bytes) > 2 * CONTENT_CHUNK_SIZE
+        else repr(raw_bytes)
+    )
 
 
 class TcpEchoServer:
@@ -150,10 +150,13 @@ class TcpEchoServer:
                 if self.port == 0:
                     self.port = self.get_listening_port()
                 self.sock.setblocking(False)
-                self.logger.log('%s Listening on host:%s, port:%s' % (self.prefix, self.HOST, self.port))
+                self.logger.log(
+                    f'{self.prefix} Listening on host:{self.HOST}, port:{self.port}'
+                )
+
             except Exception:
-                self.error = ('%s Opening listen socket %s:%s exception: %s' %
-                              (self.prefix, self.HOST, self.port, traceback.format_exc()))
+                self.error = f'{self.prefix} Opening listen socket {self.HOST}:{self.port} exception: {traceback.format_exc()}'
+
                 self.logger.log(self.error)
                 return 1
 
@@ -174,24 +177,17 @@ class TcpEchoServer:
                     if elapsed > self.timeout:
                         self.exit_status = "Exiting due to timeout. Total echoed = %d" % total_echoed
                         break
-                if self.echo_count > 0:
-                    if total_echoed >= self.echo_count:
-                        self.exit_status = "Exiting due to echo byte count. Total echoed = %d" % total_echoed
-                        break
-                events = sel.select(timeout=0.1)
-                if events:
+                if self.echo_count > 0 and total_echoed >= self.echo_count:
+                    self.exit_status = "Exiting due to echo byte count. Total echoed = %d" % total_echoed
+                    break
+                if events := sel.select(timeout=0.1):
                     for key, mask in events:
                         if key.data is None:
                             if key.fileobj is self.sock:
                                 self.do_accept(key.fileobj, sel, self.logger, self.conn_stall, self.close_on_conn)
-                            else:
-                                pass  # Only listener 'sock' has None in opaque data field
                         else:
                             n_echoed = self.do_service(key, mask, sel, self.logger, self.close_on_data)
-                            total_echoed += n_echoed if n_echoed > 0 else 0
-                else:
-                    pass   # select timeout. probably.
-
+                            total_echoed += max(n_echoed, 0)
             sel.unregister(self.sock)
             self.sock.close()
 
@@ -297,7 +293,7 @@ class TcpEchoServer:
         return retval
 
     def wait(self, timeout=TIMEOUT):
-        self.logger.log("%s Server is shutting down" % self.prefix)
+        self.logger.log(f"{self.prefix} Server is shutting down")
         self.keep_running = False
         self._thread.join(timeout)
 
@@ -339,7 +335,7 @@ def main(argv):
     port = args.port
 
     # name / prefix
-    prefix = args.name if args.name is not None else "ECHO_SERVER (%s)" % (str(port))
+    prefix = args.name if args.name is not None else f"ECHO_SERVER ({str(port)})"
 
     # echo
     if args.echo < 0:
@@ -358,9 +354,12 @@ def main(argv):
 
     try:
         # logging
-        logger = Logger(title="%s port %s" % (prefix, port),
-                        print_to_console=args.log,
-                        save_for_dump=False)
+        logger = Logger(
+            title=f"{prefix} port {port}",
+            print_to_console=args.log,
+            save_for_dump=False,
+        )
+
 
         server = TcpEchoServer(prefix, port, args.echo, args.timeout, logger,
                                args.connect_stall, args.close_on_connect, args.close_on_data)
@@ -369,22 +368,22 @@ def main(argv):
         while keep_running:
             time.sleep(0.1)
             if server.error is not None:
-                logger.log("%s Server stopped with error: %s" % (prefix, server.error))
+                logger.log(f"{prefix} Server stopped with error: {server.error}")
                 keep_running = False
                 retval = 1
             if server.exit_status is not None:
-                logger.log("%s Server stopped with status: %s" % (prefix, server.exit_status))
+                logger.log(f"{prefix} Server stopped with status: {server.exit_status}")
                 keep_running = False
             if signaller.kill_now:
-                logger.log("%s Process killed with signal" % prefix)
+                logger.log(f"{prefix} Process killed with signal")
                 keep_running = False
             if keep_running and not server.is_running:
-                logger.log("%s Server stopped with no error or status" % prefix)
+                logger.log(f"{prefix} Server stopped with no error or status")
                 keep_running = False
 
     except Exception:
         if logger is not None:
-            logger.log("%s Exception: %s" % (prefix, traceback.format_exc()))
+            logger.log(f"{prefix} Exception: {traceback.format_exc()}")
         retval = 1
 
     if server is not None and server.sock is not None:

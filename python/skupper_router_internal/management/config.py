@@ -59,8 +59,7 @@ class Config:
             try:
                 self.load(filename, raw_json)
             except Exception as e:
-                raise Exception("Cannot load configuration file %s: %s"
-                                % (filename, e))
+                raise Exception(f"Cannot load configuration file {filename}: {e}")
         else:
             self.entities: List[Dict[str, Any]] = []
 
@@ -73,7 +72,7 @@ class Config:
     def transform_sections(sections: List[Any]) -> None:
         for s in sections:
             s[0] = camelcase(s[0])
-            s[1] = dict((camelcase(k), v) for k, v in s[1].items())
+            s[1] = {camelcase(k): v for k, v in s[1].items()}
             if s[0] == "address":
                 s[0] = "router.config.address"
             if s[0] == "autoLink":
@@ -156,10 +155,12 @@ class Config:
                 return line
 
             # filter off pattern items before stripping comments
-            if attr_item.search(line):
-                if re.sub(attr_item, r'\1', line) in special_snowflakes:
-                    self._line_num += 1
-                    return re.sub(hash_ok, r'"\1": "\2",', line)
+            if (
+                attr_item.search(line)
+                and re.sub(attr_item, r'\1', line) in special_snowflakes
+            ):
+                self._line_num += 1
+                return re.sub(hash_ok, r'"\1": "\2",', line)
 
             # now trim trailing comment
             line = line.split('#')[0].strip()
@@ -338,12 +339,15 @@ def configure_dispatch(dispatch: int, filename: str) -> None:
 
     # Configure remaining types except for connector and listener
     for e in config.entities:
-        if not e['type'] in ['io.skupper.router.connector', 'io.skupper.router.listener']:
+        if e['type'] not in [
+            'io.skupper.router.connector',
+            'io.skupper.router.listener',
+        ]:
             configure(e)
 
     # Load the vhosts from the .json files in policyDir
     # Only vhosts are loaded. Other entities in these files are silently discarded.
-    if not policyDir == '':
+    if policyDir != '':
         apath = os.path.abspath(policyDir)
         for i in os.listdir(policyDir):
             if i.endswith(".json"):

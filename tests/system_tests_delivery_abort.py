@@ -180,26 +180,26 @@ class MessageRouteTruncateTest(MessagingHandler):
     def send(self):
         next_op = self.program.pop(0) if len(self.program) > 0 else None
         if next_op == 'Send_Short_1':
-            m = Message(body="%s" % next_op)
+            m = Message(body=f"{next_op}")
             self.sender1.send(m)
         elif next_op == 'Send_Long_Truncated':
-            for i in range(100):
+            for _ in range(100):
                 self.long_data += self.data
             self.delivery  = self.sender1.delivery(self.sender1.delivery_tag())
             self.streaming = True
             self.stream()
         elif next_op == 'Send_Short_2':
             m = Message(body="2")
-            for i in range(10):
+            for _ in range(10):
                 self.sender2.send(m)
             m = Message(body="Send_Short_2")
             self.sender2.send(m)
             self.sender2.close()
         elif next_op == 'Send_Short_3':
             m = Message(body="3")
-            for i in range(10):
+            for _ in range(10):
                 self.sender3.send(m)
-            m = Message(body="%s" % next_op)
+            m = Message(body=f"{next_op}")
             self.sender3.send(m)
             self.sender_conn.close()
 
@@ -212,9 +212,7 @@ class MessageRouteTruncateTest(MessagingHandler):
     def on_message(self, event):
         m = event.message
         self.result.append(m.body)
-        if m.body == 'Send_Short_1':
-            self.send()
-        elif m.body == 'Send_Short_2':
+        if m.body in ['Send_Short_1', 'Send_Short_2']:
             self.send()
         elif m.body == 'Send_Short_3':
             if self.result != self.expected_result:
@@ -273,7 +271,7 @@ class MessageRouteAbortTest(MessagingHandler):
             return
 
         op, size = self.program.pop(0) if len(self.program) > 0 else (None, None)
-        self.logger.log("send - op=%s, size=%s" % (str(op), str(size)))
+        self.logger.log(f"send - op={str(op)}, size={str(size)}")
 
         if op is None:
             return
@@ -283,8 +281,8 @@ class MessageRouteAbortTest(MessagingHandler):
             body = "FINISH"
         else:
             bod = str(size)
-            bod2 = "0000000000" + bod
-            bod3 = "." + bod2[-9:]
+            bod2 = f"0000000000{bod}"
+            bod3 = f".{bod2[-9:]}"
             body = bod3 * (size // 10)
         msg = Message(body=body)
 
@@ -390,27 +388,27 @@ class MulticastTruncateTest(MessagingHandler):
             return
         next_op = self.program.pop(0) if len(self.program) > 0 else None
         if next_op == 'Send_Short_1':
-            m = Message(body="%s" % next_op)
+            m = Message(body=f"{next_op}")
             self.sender1.send(m)
 
         elif next_op == 'Send_Long_Truncated':
-            for i in range(100):
+            for _ in range(100):
                 self.long_data += self.data
             self.delivery  = self.sender1.delivery(self.sender1.delivery_tag())
             self.streaming = True
             self.stream()
         elif next_op == 'Send_Short_2':
             m = Message(body="2")
-            for i in range(10):
+            for _ in range(10):
                 self.sender2.send(m)
             m = Message(body="Send_Short_2")
             self.sender2.send(m)
             self.sender2.close()
         elif next_op == 'Send_Short_3':
             m = Message(body="3")
-            for i in range(10):
+            for _ in range(10):
                 self.sender3.send(m)
-            m = Message(body="%s" % next_op)
+            m = Message(body=f"{next_op}")
             self.sender3.send(m)
             self.sender_conn.close()
 
@@ -442,9 +440,7 @@ class MulticastTruncateTest(MessagingHandler):
             self.result1.append(m.body)
         elif event.receiver == self.receiver2:
             self.result2.append(m.body)
-        if m.body == 'Send_Short_1':
-            self.send()
-        elif m.body == 'Send_Short_2':
+        if m.body in ['Send_Short_1', 'Send_Short_2']:
             self.send()
         elif m.body == 'Send_Short_3':
             self.completions += 1

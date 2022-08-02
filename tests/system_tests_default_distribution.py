@@ -46,13 +46,24 @@ class DefaultDistributionTest(TestCase):
 
     def run_skstat(self, args, regexp=None, address=None, expect=Process.EXIT_OK):
         p = self.popen(
-            ['skstat', '--bus', str(address or self.address), '--timeout', str(TIMEOUT)] + args,
-            name='skstat-' + self.id(), stdout=PIPE, expect=expect,
-            universal_newlines=True)
+            [
+                'skstat',
+                '--bus',
+                str(address or self.address),
+                '--timeout',
+                str(TIMEOUT),
+            ]
+            + args,
+            name=f'skstat-{self.id()}',
+            stdout=PIPE,
+            expect=expect,
+            universal_newlines=True,
+        )
+
 
         out = p.communicate()[0]
         assert p.returncode == 0, \
-            "skstat exit status %s, output:\n%s" % (p.returncode, out)
+                "skstat exit status %s, output:\n%s" % (p.returncode, out)
         if regexp:
             assert re.search(regexp, out, re.I), "Can't find '%s' in '%s'" % (regexp, out)
         return out

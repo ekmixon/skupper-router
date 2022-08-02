@@ -217,7 +217,7 @@ class AutoLinkRetryTest(TestCase):
 
     def check_auto_link(self):
         long_type = 'io.skupper.router.router.config.autoLink'
-        query_command = 'QUERY --type=' + long_type
+        query_command = f'QUERY --type={long_type}'
         output = json.loads(self.run_skmanage(query_command))
 
         if output[0].get('operStatus') == "active":
@@ -240,22 +240,15 @@ class AutoLinkRetryTest(TestCase):
         return out
 
     def can_terminate(self):
-        if self.attempts == self.max_attempts:
-            return True
-
-        if self.success:
-            return True
-
-        return False
+        return True if self.attempts == self.max_attempts else bool(self.success)
 
     def schedule_auto_link_reconnect_test(self):
-        if self.attempts < self.max_attempts:
-            if not self.success:
-                Timer(self.timer_delay, self.check_auto_link).start()
+        if self.attempts < self.max_attempts and not self.success:
+            Timer(self.timer_delay, self.check_auto_link).start()
 
     def test_auto_link_reattach(self):
         long_type = 'io.skupper.router.router.config.autoLink'
-        query_command = 'QUERY --type=' + long_type
+        query_command = f'QUERY --type={long_type}'
         output = json.loads(self.run_skmanage(query_command))
 
         # Since the distribution of the autoLinked address 'examples'
@@ -363,7 +356,7 @@ class AutolinkTest(TestCase):
         self.assertIsNone(test.error)
 
         long_type = 'io.skupper.router.router'
-        query_command = 'QUERY --type=' + long_type
+        query_command = f'QUERY --type={long_type}'
         output = json.loads(self.run_skmanage(query_command))
         self.assertEqual(output[0]['deliveriesEgressRouteContainer'], 275)
         self.assertEqual(output[0]['deliveriesIngressRouteContainer'], 0)
@@ -646,17 +639,14 @@ class AutolinkMultipleReceiverUsingMyListenerTest(MessagingHandler):
         if event.sender and event.sender == self.sender:
             self.ready_to_send = True
 
-        if self.n_rx_attach1 == 1 and self.n_rx_attach2 == 1:
-            # Both attaches have been received, create a sender
-            if not self.sender:
-                self.sender = event.container.create_sender(self.normal_conn, self.dest)
+        if self.n_rx_attach1 == 1 and self.n_rx_attach2 == 1 and not self.sender:
+            self.sender = event.container.create_sender(self.normal_conn, self.dest)
 
     def on_sendable(self, event):
-        if self.ready_to_send:
-            if self.n_sent < self.count:
-                msg = Message(body="AutolinkMultipleReceiverUsingMyListenerTest")
-                self.sender.send(msg)
-                self.n_sent += 1
+        if self.ready_to_send and self.n_sent < self.count:
+            msg = Message(body="AutolinkMultipleReceiverUsingMyListenerTest")
+            self.sender.send(msg)
+            self.n_sent += 1
 
     def on_message(self, event):
         if event.receiver == self.route_conn_rcv1:
@@ -720,7 +710,8 @@ class ManageAutolinksTest(MessagingHandler):
 
     def on_link_remote_close(self, event):
         if event.link.remote_condition is not None:
-            self.error = "Received unexpected error on link-close: %s" % event.link.remote_condition.name
+            self.error = f"Received unexpected error on link-close: {event.link.remote_condition.name}"
+
             self.timer.cancel()
             self.normal_conn.close()
             self.route_conn.close()

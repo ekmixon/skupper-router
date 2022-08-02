@@ -48,17 +48,13 @@ class Frame:
     """
     FIELDS = ["fn", "dir", "file", "line"]
     def __init__(self, frame):
-        self._fields = dict()
+        self._fields = {}
         for tag in self.FIELDS:
             _ = frame.find(tag)
             self._fields[tag] = _.text if _ is not None else "<none>"
 
     def __str__(self):
-        return ("(%s) %s/%s:%s" %
-                (self._fields['fn'],
-                 self._fields['dir'],
-                 self._fields['file'],
-                 self._fields['line']))
+        return f"({self._fields['fn']}) {self._fields['dir']}/{self._fields['file']}:{self._fields['line']}"
 
     def __hash__(self):
         return hash(self.__str__())
@@ -104,10 +100,9 @@ class GeneralError(ErrorBase):
         self._what = w.text if w is not None else "<none>"
 
         # stack
-        self._stack = list()
+        self._stack = []
         s = error_xml.find("stack")
-        for frame in s.findall("frame"):
-            self._stack.append(Frame(frame))
+        self._stack.extend(Frame(frame) for frame in s.findall("frame"))
 
     def __hash__(self):
         h = super(GeneralError, self).__hash__()
@@ -132,7 +127,7 @@ class LeakError(ErrorBase):
         super(LeakError, self).__init__(kind)
         self._leaked_bytes = 0
         self._leaked_blocks = 0
-        self._stack = list()
+        self._stack = []
 
         # xwhat:
         #    leakedbytes
@@ -146,8 +141,7 @@ class LeakError(ErrorBase):
 
         # stack
         s = error_xml.find("stack")
-        for frame in s.findall("frame"):
-            self._stack.append(Frame(frame))
+        self._stack.extend(Frame(frame) for frame in s.findall("frame"))
 
     def merge(self, other):
         super(LeakError, self).merge(other)
@@ -182,18 +176,16 @@ class InvalidMemError(ErrorBase):
         #      aux stack  (where alloced, freed)
         self._what = "<none>"
         self._stack = None
-        self._auxwhat = list()
-        self._aux_stacks = list()
+        self._auxwhat = []
+        self._aux_stacks = []
         for child in error_xml:
-            if child.tag == "what":
-                self._what = child.text
             if child.tag == "auxwhat":
                 self._auxwhat.append(child.text)
+            elif child.tag == "what":
+                self._what = child.text
             if child.tag == "stack":
-                stack = list()
-                for frame in child.findall("frame"):
-                    stack.append(Frame(frame))
-                if self._stack == None:
+                stack = [Frame(frame) for frame in child.findall("frame")]
+                if self._stack is None:
                     self._stack = stack
                 else:
                     self._aux_stacks.append(stack)
@@ -239,10 +231,9 @@ class SignalError(ErrorBase):
         if sn is not None:
             self._signame = sn.text
 
-        self._stack = list()
+        self._stack = []
         s = error_xml.find("stack")
-        for frame in s.findall("frame"):
-            self._stack.append(Frame(frame))
+        self._stack.extend(Frame(frame) for frame in s.findall("frame"))
 
     def __hash__(self):
         # for now don't include what/auxwhat as it may
@@ -285,8 +276,7 @@ def parse_error(error_xml):
     Factory that returns an Error instance
     """
     kind = error_xml.find("kind").text
-    e_cls = _ERROR_CLASSES.get(kind)
-    if e_cls:
+    if e_cls := _ERROR_CLASSES.get(kind):
         return e_cls(error_xml)
     raise Exception("Unsupported error type %s, please update grinder"
                     " to handle it" % kind)
@@ -297,7 +287,7 @@ def parse_xml_file(filename, exe_name='skrouterd'):
     Parse out errors from a valgrind output xml file
     """
     logging.debug("Parsing %s", filename)
-    error_list = list()
+    error_list = []
     try:
         root = ET.parse(filename).getroot()
     except ParseError as exc:
@@ -310,35 +300,35 @@ def parse_xml_file(filename, exe_name='skrouterd'):
         return error_list
 
     pv = root.find('protocolversion')
-    if pv is None or not "4" == pv.text:
+    if pv is None or pv.text != "4":
         # unsupported xml format version
         logging.warning("Unsupported format version for %s, skipping...",
                       filename)
         return error_list
 
     pt = root.find('protocoltool')
-    if pt is None or not "memcheck" == pt.text:
+    if pt is None or pt.text != "memcheck":
         logging.warning("Not a memcheck file %s, skipping...",
                         filename)
         return error_list
 
-    if not exe_name in root.find('args/argv/exe').text:
+    if exe_name not in root.find('args/argv/exe').text:
         # not from the target executable, skip
         logging.debug("file %s is not generated from %s, skipping...",
                       filename, exe_name)
         return error_list
 
-    for error in root.findall('error'):
-        error_list.append(parse_error(error))
-
+    error_list.extend(parse_error(error) for error in root.findall('error'))
     # sigabort, etc classified as fatal_signal
-    for signal in root.findall("fatal_signal"):
-        error_list.append(SignalError(signal))
+    error_list.extend(
+        SignalError(signal) for signal in root.findall("fatal_signal")
+    )
+
     return error_list
 
 
 def main():
-    errors_map = dict()
+    errors_map = {}
     file_name = re.compile("valgrind-[0-9]+\.xml")
     for dp, dn, fn in os.walk("."):
         for name in fn:
@@ -352,15 +342,12 @@ def main():
                     else:
                         errors_map[h] = e
 
-    # sort by # of occurances
-    error_list = sorted([e for e in errors_map.values()], reverse=True)
-
-    if error_list:
+    if error_list := sorted(list(errors_map.values()), reverse=True):
         for e in error_list:
             print("\n-----")
-            print("%s" % str(e))
+            print(f"{str(e)}")
         print("\n\n-----")
-        print("----- %s total issues detected" % len(error_list))
+        print(f"----- {len(error_list)} total issues detected")
         print("-----")
     else:
         print("No Valgrind errors found! Congratulations ;)")

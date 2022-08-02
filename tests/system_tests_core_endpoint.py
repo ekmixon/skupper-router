@@ -96,9 +96,8 @@ class DenyLinkTest(MessagingHandler):
         self.sender_failed   = False
 
     def timeout(self):
-        self.error = "Timeout Expired: receiver_failed=%s sender_failed=%s" %\
-                     ("yes" if self.receiver_failed else "no",
-                      "yes" if self.sender_failed else "no")
+        self.error = f'Timeout Expired: receiver_failed={"yes" if self.receiver_failed else "no"} sender_failed={"yes" if self.sender_failed else "no"}'
+
         self.conn.close()
 
     def on_start(self, event):
@@ -229,7 +228,7 @@ class EchoTest(MessagingHandler):
         self.sender   = None
 
     def timeout(self):
-        self.error = "Timeout Expired while attempting action: %s" % self.action
+        self.error = f"Timeout Expired while attempting action: {self.action}"
         self.conn.close()
 
     def fail(self, error):
@@ -250,8 +249,9 @@ class EchoTest(MessagingHandler):
                 event.sender.source.address = self.address
                 event.sender.open()
             else:
-                self.fail("Incorrect address on incoming sender: got %s, expected %s" %
-                          (event.sender.remote_source.address, self.address))
+                self.fail(
+                    f"Incorrect address on incoming sender: got {event.sender.remote_source.address}, expected {self.address}"
+                )
 
     def on_link_opened(self, event):
         if event.receiver == self.receiver:

@@ -32,7 +32,7 @@ from typing import Any, Dict, Union
 def dictify(od: Union[OrderedDict, Any]) -> Dict[Any, Any]:
     """Recursively replace OrderedDict with dict"""
     if isinstance(od, OrderedDict):
-        return dict((k, dictify(v)) for k, v in od.items())
+        return {k: dictify(v) for k, v in od.items()}
     else:
         return od
 
@@ -43,7 +43,7 @@ def BINARY(s: Union[str, bytes]) -> bytes:
     elif isinstance(s, bytes):
         return s
     else:
-        raise TypeError("%s cannot be converted to binary" % type(s))
+        raise TypeError(f"{type(s)} cannot be converted to binary")
 
 
 def UNICODE(s: Union[str, bytes]) -> str:

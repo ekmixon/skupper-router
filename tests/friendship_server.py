@@ -33,14 +33,14 @@ class FriendShipService(FriendshipServicer):
     """
 
     def __init__(self):
-        self.people = list()
+        self.people = []
 
     def Create(self, request, context):
         person = request  # type: Person
         res = CreateResult()  # type: CreateResult
         if person.email in [p.email for p in self.people]:
             res.success = False
-            res.message = "Person already exists (email: %s)" % person.email
+            res.message = f"Person already exists (email: {person.email})"
             return res
 
         self.people.append(person)
@@ -85,10 +85,7 @@ class FriendShipService(FriendshipServicer):
                 yield res
 
     def get_person(self, email):
-        for p in self.people:
-            if p.email == email:
-                return p
-        return None
+        return next((p for p in self.people if p.email == email), None)
 
 
 def serve_secure(port, options=None):
@@ -109,7 +106,7 @@ def serve_secure(port, options=None):
                                                      require_client_auth=True)
     # The server will listen on a TLS enabled secure port.
     # The router connector will connect to this secure port.
-    server.add_secure_port('[::]:%s' % port, server_credentials)
+    server.add_secure_port(f'[::]:{port}', server_credentials)
     server.start()
     return server
 
@@ -118,6 +115,6 @@ def serve(port, options=None):
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=1),
                          options=options)
     add_FriendshipServicer_to_server(FriendShipService(), server)
-    server.add_insecure_port('[::]:%s' % port)
+    server.add_insecure_port(f'[::]:{port}')
     server.start()
     return server

@@ -42,10 +42,8 @@ class NodeTracker:
         self.flux_mode             = False
         self.nodes                 = {}  # id => RouterNode
         self.nodes_by_link_id      = {}  # link-id => node-id
-        self.maskbits              = []
         self.next_maskbit          = 1   # Reserve bit '0' to represent this router
-        for i in range(max_routers):
-            self.maskbits.append(None)
+        self.maskbits = [None for _ in range(max_routers)]
         self.maskbits[0]      = True
         self.neighbor_max_age = self.container.config.helloMaxAgeSeconds
         self.ls_max_age       = self.container.config.remoteLsMaxAgeSeconds
@@ -76,31 +74,34 @@ class NodeTracker:
             # if we've waited too long for a refresh.  If so, disconnect the link
             # and remove the node from the local link state.
             ##
-            if node.is_neighbor():
-                if now - node.neighbor_refresh_time > self.neighbor_max_age:
-                    node.remove_link()
-                    if self.link_state.del_peer(node_id):
-                        self.link_state_changed = True
+            if (
+                node.is_neighbor()
+                and now - node.neighbor_refresh_time > self.neighbor_max_age
+            ):
+                node.remove_link()
+                if self.link_state.del_peer(node_id):
+                    self.link_state_changed = True
 
             ##
             # Check the age of the node's link state.  If it's too old, clear it out.
             ##
-            if now - node.link_state.last_seen > self.ls_max_age:
-                if node.link_state.has_peers():
-                    node.link_state.del_all_peers()
-                    self.recompute_topology = True
+            if (
+                now - node.link_state.last_seen > self.ls_max_age
+                and node.link_state.has_peers()
+            ):
+                node.link_state.del_all_peers()
+                self.recompute_topology = True
 
             ##
             # If the node has empty link state, check to see if it appears in any other
             # node's link state.  If it does not, then delete the node.
             ##
             if not node.link_state.has_peers() and not node.is_neighbor():
-                delete_node = True
-                for _id, _n in self.nodes.items():
-                    if _id != node_id:
-                        if _n.link_state.is_peer(node_id):
-                            delete_node = False
-                            break
+                delete_node = not any(
+                    _id != node_id and _n.link_state.is_peer(node_id)
+                    for _id, _n in self.nodes.items()
+                )
+
                 if delete_node:
                     ##
                     # The keep_alive_count is set to zero when a new node is first
@@ -234,8 +235,7 @@ class NodeTracker:
         Invoked when an inter-router link is dropped.
         """
         self.container.log_ls(LOG_INFO, "Link to Neighbor Router Lost - link_tag=%d" % link_id)
-        node_id = self.link_id_to_node_id(link_id)
-        if node_id:
+        if node_id := self.link_id_to_node_id(link_id):
             self.nodes_by_link_id.pop(link_id)
             node = self.nodes[node_id]
             node.remove_link()
@@ -355,12 +355,16 @@ class NodeTracker:
         if self.next_maskbit is None:
             raise Exception("Exceeded Maximum Router Count")
         result = self.next_maskbit
-        self.next_maskbit = None
         self.maskbits[result] = True
-        for n in range(result + 1, self.max_routers):
-            if self.maskbits[n] is None:
-                self.next_maskbit = n
-                break
+        self.next_maskbit = next(
+            (
+                n
+                for n in range(result + 1, self.max_routers)
+                if self.maskbits[n] is None
+            ),
+            None,
+        )
+
         return result
 
     def _free_maskbit(self, i):
@@ -392,7 +396,7 @@ class RouterNode:
         self.need_ls_request         = True
         self.need_mobile_request     = False
         self.keep_alive_count        = 0
-        self.adapter.add_router("amqp:/_topo/0/%s/qdrouter" % self.id, self.maskbit)
+        self.adapter.add_router(f"amqp:/_topo/0/{self.id}/qdrouter", self.maskbit)
         self.log(LOG_TRACE, "Node %s created: maskbit=%d" % (self.id, self.maskbit))
         self.adapter.get_agent().add_implementation(self, "router.node")
 
@@ -429,14 +433,14 @@ class RouterNode:
         if self.peer_link_id is not None:
             self.peer_link_id = None
             self.adapter.remove_link(self.maskbit)
-            self.log(LOG_TRACE, "Node %s link removed" % self.id)
+            self.log(LOG_TRACE, f"Node {self.id} link removed")
 
     def delete(self):
         self.adapter.get_agent().remove_implementation(self)
         self.unmap_all_addresses()
         self.adapter.del_router(self.maskbit)
         self.parent._free_maskbit(self.maskbit)
-        self.log(LOG_TRACE, "Node %s deleted" % self.id)
+        self.log(LOG_TRACE, f"Node {self.id} deleted")
 
     def set_next_hop(self, next_hop):
         if self.id == next_hop.id:
@@ -450,7 +454,7 @@ class RouterNode:
             return
         self.next_hop_router = next_hop
         self.adapter.set_next_hop(self.maskbit, next_hop.maskbit)
-        self.log(LOG_TRACE, "Node %s next hop set: %s" % (self.id, next_hop.id))
+        self.log(LOG_TRACE, f"Node {self.id} next hop set: {next_hop.id}")
 
     def set_valid_origins(self, valid_origins):
         if self.valid_origins == valid_origins:
@@ -471,7 +475,7 @@ class RouterNode:
         if self.next_hop_router:
             self.next_hop_router = None
             self.adapter.remove_next_hop(self.maskbit)
-            self.log(LOG_TRACE, "Node %s next hop removed" % self.id)
+            self.log(LOG_TRACE, f"Node {self.id} next hop removed")
 
     def is_neighbor(self):
         return self.peer_link_id is not None
@@ -508,7 +512,7 @@ class RouterNode:
     def unmap_all_addresses(self):
         self.mobile_address_sequence = 0
         self.adapter.flush_destinations(self.maskbit)
-        self.log(LOG_DEBUG, "Remote destinations flushed from router %s" % (self.id))
+        self.log(LOG_DEBUG, f"Remote destinations flushed from router {self.id}")
 
     def update_instance(self, instance, version):
         if instance is None:
@@ -523,5 +527,5 @@ class RouterNode:
         self.version  = version
         self.link_state.del_all_peers()
         self.unmap_all_addresses()
-        self.log(LOG_INFO, "Detected Restart of Router Node %s" % self.id)
+        self.log(LOG_INFO, f"Detected Restart of Router Node {self.id}")
         return True

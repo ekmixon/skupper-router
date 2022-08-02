@@ -36,33 +36,52 @@ class ManyLogFilesTest(TestCase):
         super(ManyLogFilesTest, cls).setUpClass()
         name = "test-router"
         LogLevelUpdateTest.listen_port = cls.tester.get_port()
-        config = Qdrouterd.Config([
-            ('router', {'mode': 'standalone', 'id': 'QDR'}),
-            ('listener', {'port': LogLevelUpdateTest.listen_port}),
+        config = Qdrouterd.Config(
+            [
+                ('router', {'mode': 'standalone', 'id': 'QDR'}),
+                ('listener', {'port': LogLevelUpdateTest.listen_port}),
+                ('address', {'prefix': 'closest', 'distribution': 'closest'}),
+                ('address', {'prefix': 'balanced', 'distribution': 'balanced'}),
+                ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+                (
+                    'log',
+                    {
+                        'module': 'SERVER',
+                        'enable': 'trace+',
+                        'includeSource': 'true',
+                        'outputFile': f'{name}-server.log',
+                    },
+                ),
+                (
+                    'log',
+                    {
+                        'module': 'ROUTER_CORE',
+                        'enable': 'trace+',
+                        'includeSource': 'true',
+                        'outputFile': f'{name}-core.log',
+                    },
+                ),
+                (
+                    'log',
+                    {
+                        'module': 'PROTOCOL',
+                        'enable': 'trace+',
+                        'includeSource': 'true',
+                        'outputFile': f'{name}-protocol.log',
+                    },
+                ),
+                (
+                    'log',
+                    {
+                        'module': 'ROUTER',
+                        'enable': 'trace+',
+                        'includeSource': 'true',
+                        'outputFile': f'{name}-core.log',
+                    },
+                ),
+            ]
+        )
 
-            ('address', {'prefix': 'closest', 'distribution': 'closest'}),
-            ('address', {'prefix': 'balanced', 'distribution': 'balanced'}),
-            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
-
-            # We are sending three different module trace logs to three different
-            # files and we will make sure that these files exist and these
-            # files contain only logs pertinent to the module in question
-            ('log', {'module': 'SERVER', 'enable': 'trace+',
-                     'includeSource': 'true', 'outputFile': name + '-server.log'}),
-            ('log', {'module': 'ROUTER_CORE', 'enable': 'trace+',
-                     'includeSource': 'true',
-                     'outputFile': name + '-core.log'}),
-            ('log', {'module': 'PROTOCOL', 'enable': 'trace+',
-                     'includeSource': 'true',
-                     'outputFile': name + '-protocol.log'}),
-
-            # try two modules to the same file.
-            # Put the ROUTER_CORE and ROUTER module logs into the same log file
-            ('log', {'module': 'ROUTER', 'enable': 'trace+',
-                     'includeSource': 'true',
-                     'outputFile': name + '-core.log'}),
-
-        ])
         cls.router = cls.tester.qdrouterd(name, config)
         cls.router.wait_ready()
         cls.address = cls.router.addresses[0]
@@ -83,7 +102,7 @@ class ManyLogFilesTest(TestCase):
         server_log_found = True
         all_server_logs = True
         try:
-            with open(self.router.outdir + '/test-router-server.log', 'r') as server_log:
+            with open(f'{self.router.outdir}/test-router-server.log', 'r') as server_log:
                 for line in server_log:
                     parts = line.split(" ")
                     if parts[3] != "SERVER":
@@ -98,7 +117,7 @@ class ManyLogFilesTest(TestCase):
         protocol_log_found = True
         all_protocol_logs = True
         try:
-            with open(self.router.outdir + '/test-router-protocol.log', 'r') as protocol_log:
+            with open(f'{self.router.outdir}/test-router-protocol.log', 'r') as protocol_log:
                 for line in protocol_log:
                     parts = line.split(" ")
                     if parts[3] != "PROTOCOL":
@@ -113,10 +132,10 @@ class ManyLogFilesTest(TestCase):
         core_router_log_found = True
         all_core_router_logs = True
         try:
-            with open(self.router.outdir + '/test-router-core.log', 'r') as core_log:
+            with open(f'{self.router.outdir}/test-router-core.log', 'r') as core_log:
                 for line in core_log:
                     parts = line.split(" ")
-                    if parts[3] != "ROUTER_CORE" and parts[3] != "ROUTER":
+                    if parts[3] not in ["ROUTER_CORE", "ROUTER"]:
                         all_core_router_logs = False
                         break
 
@@ -162,12 +181,11 @@ class LogModuleProtocolTest(TestCase):
         TEST_ADDR = "moduletest0"
         self.create_sender_receiver(TEST_ADDR, hello_world_0, blocking_connection)
 
-        num_attaches = 0
         logs = qd_manager.get_log()
-        for log in logs:
-            if 'PROTOCOL' in log[0]:
-                if "@attach" in log[2] and TEST_ADDR in log[2]:
-                    num_attaches += 1
+        num_attaches = sum(
+            'PROTOCOL' in log[0] and "@attach" in log[2] and TEST_ADDR in log[2]
+            for log in logs
+        )
 
         # num_attaches for address TEST_ADDR must be 4, two attaches to/from sender and receiver
         self.assertTrue(num_attaches == 4)
@@ -190,12 +208,11 @@ class LogModuleProtocolTest(TestCase):
         hello_world_1 = "Hello World_1!"
         self.create_sender_receiver(TEST_ADDR, hello_world_1, blocking_connection)
 
-        num_attaches = 0
         logs = qd_manager.get_log()
-        for log in logs:
-            if 'PROTOCOL' in log[0]:
-                if "@attach" in log[2] and TEST_ADDR in log[2]:
-                    num_attaches += 1
+        num_attaches = sum(
+            'PROTOCOL' in log[0] and "@attach" in log[2] and TEST_ADDR in log[2]
+            for log in logs
+        )
 
         # num_attaches for address TEST_ADDR must be 4, two attaches to/from sender and receiver
         self.assertTrue(num_attaches == 4)
@@ -209,12 +226,11 @@ class LogModuleProtocolTest(TestCase):
         hello_world_2 = "Hello World_2!"
         self.create_sender_receiver(TEST_ADDR, hello_world_2, blocking_connection)
 
-        num_attaches = 0
         logs = qd_manager.get_log()
-        for log in logs:
-            if 'PROTOCOL' in log[0]:
-                if "@attach" in log[2] and TEST_ADDR in log[2]:
-                    num_attaches += 1
+        num_attaches = sum(
+            'PROTOCOL' in log[0] and "@attach" in log[2] and TEST_ADDR in log[2]
+            for log in logs
+        )
 
         # num_attaches for address TEST_ADDR must be 4, two attaches to/from sender and receiver
         self.assertTrue(num_attaches == 0)
@@ -231,10 +247,11 @@ class EnableConnectionLevelInterRouterTraceTest(TestCase):
         def router(name, connection):
 
             config = [
-                ('router', {'mode': 'interior', 'id': 'QDR.%s' % name}),
+                ('router', {'mode': 'interior', 'id': f'QDR.{name}'}),
                 ('listener', {'port': cls.tester.get_port()}),
-                connection
+                connection,
             ]
+
 
             config = Qdrouterd.Config(config)
 
@@ -256,14 +273,18 @@ class EnableConnectionLevelInterRouterTraceTest(TestCase):
         cls.address = cls.routers[1].addresses[0]
 
     def _get_transfer_frame_count(self, conn_id):
-        inter_router_cid = "[C" + conn_id + "]"
+        inter_router_cid = f"[C{conn_id}]"
         num_transfers = 0
         with open(self.routers[1].logfile_path) as router_log:
             for log_line in router_log:
                 log_components = log_line.split(" ")
-                if len(log_components) > 8 and 'PROTOCOL' in log_components[3]:
-                    if inter_router_cid in log_components[5] and '@transfer' in log_components[8]:
-                        num_transfers += 1
+                if (
+                    len(log_components) > 8
+                    and 'PROTOCOL' in log_components[3]
+                    and inter_router_cid in log_components[5]
+                    and '@transfer' in log_components[8]
+                ):
+                    num_transfers += 1
         return num_transfers
 
     def test_inter_router_protocol_trace(self):
@@ -384,10 +405,10 @@ class EnableConnectionLevelProtocolTraceTest(TestCase):
         num_attaches_2 = 0
         logs = qd_manager.get_log()
         for log in logs:
-            if 'PROTOCOL' in log[0]:
-                if "@attach" in log[2] and TEST_ADDR_1 in log[2]:
+            if 'PROTOCOL' in log[0] and "@attach" in log[2]:
+                if TEST_ADDR_1 in log[2]:
                     num_attaches_1 += 1
-                elif "@attach" in log[2] and TEST_ADDR_2 in log[2]:
+                elif TEST_ADDR_2 in log[2]:
                     num_attaches_2 += 1
 
         # num_attaches_1 for address TEST_ADDR_1 must be 4, two attaches to/from sender and receiver
@@ -406,11 +427,10 @@ class EnableConnectionLevelProtocolTraceTest(TestCase):
 
         # Since tracing was turned off, there should be no detaches
         logs = qd_manager.get_log()
-        num_detaches = 0
-        for log in logs:
-            if 'PROTOCOL' in log[0]:
-                if "@detach" in log[2]:
-                    num_detaches += 1
+        num_detaches = sum(
+            'PROTOCOL' in log[0] and "@detach" in log[2] for log in logs
+        )
+
         self.assertTrue(num_detaches == 0)
         blocking_receiver_2.close()
         blocking_sender_2.close()
@@ -458,14 +478,12 @@ class LogLevelUpdateTest(TestCase):
         TEST_ADDR = "apachetest1"
         self.create_sender_receiver(TEST_ADDR, hello_world_1, blocking_connection)
 
-        # STEP 1: Make sure that proton trace logging is turned on already.
-        # Search for attach frames in the log for address TEST_ADDR. There should be 4 attaches
-        num_attaches = 0
         logs = qd_manager.get_log()
-        for log in logs:
-            if 'PROTOCOL' in log[0]:
-                if "@attach" in log[2] and TEST_ADDR in log[2]:
-                    num_attaches += 1
+        num_attaches = sum(
+            'PROTOCOL' in log[0] and "@attach" in log[2] and TEST_ADDR in log[2]
+            for log in logs
+        )
+
         # num_attaches for address TEST_ADDR must be 4, two attaches to/from sender and receiver
         self.assertTrue(num_attaches == 4)
 
@@ -479,13 +497,12 @@ class LogLevelUpdateTest(TestCase):
         TEST_ADDR = "apachetest2"
         self.create_sender_receiver(TEST_ADDR, hello_world_2, blocking_connection)
 
-        # STEP 3: Count the nimber of attaches for address TEST_ADDR, there should be none
-        num_attaches = 0
         logs = qd_manager.get_log()
-        for log in logs:
-            if 'PROTOCOL' in log[0]:
-                if "@attach" in log[2] and TEST_ADDR in log[2]:
-                    num_attaches += 1
+        num_attaches = sum(
+            'PROTOCOL' in log[0] and "@attach" in log[2] and TEST_ADDR in log[2]
+            for log in logs
+        )
+
         # There should be no attach frames with address TEST_ADDR
         # because we turned of trace logging.
         self.assertTrue(num_attaches == 0)
@@ -495,13 +512,13 @@ class LogLevelUpdateTest(TestCase):
         qd_manager.update("io.skupper.router.log", {"enable": "trace+"}, name="log/DEFAULT")
         self.create_sender_receiver(TEST_ADDR, hello_world_3, blocking_connection)
 
-        # STEP 3: Count the number of attaches for address TEST_ADDR, there should be 4
-        num_attaches = 0
         logs = qd_manager.get_log()
-        for log in logs:
-            if 'PROTOCOL' in log[0]:
-                if "@attach" in log[2] and TEST_ADDR in log[2]:
-                    num_attaches += 1
+        num_attaches = sum(
+            1
+            for log in logs
+            if 'PROTOCOL' in log[0] and "@attach" in log[2] and TEST_ADDR in log[2]
+        )
+
         # There should be 4 attach frames with address TEST_ADDR
         # because we turned on trace logging.
         self.assertTrue(num_attaches == 4)
@@ -514,9 +531,12 @@ class LogLevelUpdateTest(TestCase):
         num_attaches = 0
         logs = qd_manager.get_log()
         for log in logs:
-            if 'PROTOCOL' in log[0]:
-                if "@attach" in log[2] and TEST_ADDR in log[2]:
-                    num_attaches += 1
+            if (
+                'PROTOCOL' in log[0]
+                and "@attach" in log[2]
+                and TEST_ADDR in log[2]
+            ):
+                num_attaches += 1
 
         self.assertTrue(num_attaches == 4)
 
@@ -541,13 +561,12 @@ class LogLevelUpdateTest(TestCase):
 
         self.create_sender_receiver(TEST_ADDR, hello_world_5,
                                     blocking_connection)
-        # Count the number of attaches for address TEST_ADDR, there should be 4
-        num_attaches = 0
         logs = qd_manager.get_log()
-        for log in logs:
-            if 'PROTOCOL' in log[0]:
-                if "@attach" in log[2] and TEST_ADDR in log[2]:
-                    num_attaches += 1
+        num_attaches = sum(
+            'PROTOCOL' in log[0] and "@attach" in log[2] and TEST_ADDR in log[2]
+            for log in logs
+        )
+
         # There should be 4 attach frames with address TEST_ADDR
         # because we turned on trace logging.
         self.assertTrue(num_attaches == 4)
@@ -557,25 +576,23 @@ class LogLevelUpdateTest(TestCase):
 
         self.create_sender_receiver(TEST_ADDR, hello_world_6, blocking_connection)
 
-        # Count the number of attaches for address TEST_ADDR, there should be 0
-        num_attaches = 0
         logs = qd_manager.get_log()
-        for log in logs:
-            if 'PROTOCOL' in log[0]:
-                if "@attach" in log[2] and TEST_ADDR in log[2]:
-                    num_attaches += 1
+        num_attaches = sum(
+            'PROTOCOL' in log[0] and "@attach" in log[2] and TEST_ADDR in log[2]
+            for log in logs
+        )
+
         self.assertTrue(num_attaches == 0)
 
         # Create a brand new blocking connection  and make sure that connection
         # is logging at info level as well.
         TEST_ADDR = "apachetest7"
         self.create_sender_receiver(TEST_ADDR, hello_world_7)
-        num_attaches = 0
         logs = qd_manager.get_log()
-        for log in logs:
-            if 'PROTOCOL' in log[0]:
-                if "@attach" in log[2] and TEST_ADDR in log[2]:
-                    num_attaches += 1
+        num_attaches = sum(
+            'PROTOCOL' in log[0] and "@attach" in log[2] and TEST_ADDR in log[2]
+            for log in logs
+        )
 
         self.assertTrue(num_attaches == 0)
 
@@ -586,18 +603,25 @@ class RouterCoreModuleLogTest(TestCase):
         super(RouterCoreModuleLogTest, cls).setUpClass()
         name = "test-router"
         LogLevelUpdateTest.listen_port = cls.tester.get_port()
-        config = Qdrouterd.Config([
-            ('router', {'mode': 'standalone', 'id': 'QDR'}),
-            ('listener', {'port': LogLevelUpdateTest.listen_port}),
+        config = Qdrouterd.Config(
+            [
+                ('router', {'mode': 'standalone', 'id': 'QDR'}),
+                ('listener', {'port': LogLevelUpdateTest.listen_port}),
+                ('address', {'prefix': 'closest', 'distribution': 'closest'}),
+                ('address', {'prefix': 'balanced', 'distribution': 'balanced'}),
+                ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
+                (
+                    'log',
+                    {
+                        'module': 'ROUTER_CORE',
+                        'enable': 'trace+',
+                        'includeSource': 'true',
+                        'outputFile': f'{name}-core.log',
+                    },
+                ),
+            ]
+        )
 
-            ('address', {'prefix': 'closest', 'distribution': 'closest'}),
-            ('address', {'prefix': 'balanced', 'distribution': 'balanced'}),
-            ('address', {'prefix': 'multicast', 'distribution': 'multicast'}),
-            ('log', {'module': 'ROUTER_CORE', 'enable': 'trace+',
-                     'includeSource': 'true',
-                     'outputFile': name + '-core.log'})
-
-        ])
         cls.router = cls.tester.qdrouterd(name, config)
         cls.router.wait_ready()
         cls.address = cls.router.addresses[0]
@@ -618,12 +642,7 @@ class RouterCoreModuleLogTest(TestCase):
         qd_manager = QdManager(self.address)
         logs = qd_manager.get_log()
 
-        router_core_found = False
-        for log in logs:
-            if 'ROUTER_CORE' in log[0]:
-                router_core_found = True
-                break
-
+        router_core_found = any('ROUTER_CORE' in log[0] for log in logs)
         self.assertTrue(router_core_found)
 
         core_log_file_found = True
@@ -632,7 +651,7 @@ class RouterCoreModuleLogTest(TestCase):
             # Before the fix to DISPATCH-1575, this file will not be
             # created because the router core module was logging to the ROUTER
             # module instead of the ROUTER_CORE module.
-            with open(self.router.outdir + '/test-router-core.log', 'r') as core_log:
+            with open(f'{self.router.outdir}/test-router-core.log', 'r') as core_log:
                 for line in core_log:
                     # Every line in the file must log to the router core module.
                     if "ROUTER_CORE" not in line:

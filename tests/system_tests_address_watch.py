@@ -254,13 +254,13 @@ class AddressWatchTest(MessagingHandler):
                     log_lines = router_log.read().split("\n")
                     search_lines = [s for s in log_lines if "ADDRESS_WATCH" in s and "on_watch(%d)" % self.index in s]
                     matches = [s for s in search_lines if "loc: 1 rem: 0" in s]
-                    if len(matches) == 0:
+                    if not matches:
                         raise AssertionError("Didn't see local consumer on router 1")
                 with open(self.host_b.logfile_path, 'r') as router_log:
                     log_lines = router_log.read().split("\n")
                     search_lines = [s for s in log_lines if "ADDRESS_WATCH" in s and "on_watch(%d)" % self.index in s]
                     matches = [s for s in search_lines if ("loc: 0 rem: 1" in s) or ("loc: 1 rem: 0" in s)]
-                    if len(matches) == 0:
+                    if not matches:
                         raise AssertionError("Didn't see remote consumer and local producer on router 2")
 
             # Sometimes the CI is so fast that there is not enough time for the router to write to the log file.
@@ -309,7 +309,7 @@ class DynamicAddressWatchTest(MessagingHandler):
         self.timer.cancel()
 
     def timeout(self):
-        self.fail("Timeout Expired - Phase: %s" % self.phase)
+        self.fail(f"Timeout Expired - Phase: {self.phase}")
 
     def setup_dests(self):
         for conn in self.conn_dests:
@@ -350,7 +350,10 @@ class DynamicAddressWatchTest(MessagingHandler):
         addr   = ap['address']
 
         if addr != self.address:
-            self.fail("Received a watch for an unexpected address:  Expected %s, got %s" % (self.address, addr))
+            self.fail(
+                f"Received a watch for an unexpected address:  Expected {self.address}, got {addr}"
+            )
+
 
         ##print("phase=%s, local=%d, remote=%d" % (self.phase, local, remote))
 
@@ -417,7 +420,7 @@ class DropOneAddressWatchTest(MessagingHandler):
         self.timer.cancel()
 
     def timeout(self):
-        self.fail("Timeout Expired - Phase: %s" % self.phase)
+        self.fail(f"Timeout Expired - Phase: {self.phase}")
 
     def setup_dests(self):
         for conn in self.conn_dests:
@@ -457,7 +460,10 @@ class DropOneAddressWatchTest(MessagingHandler):
         addr   = ap['address']
 
         if addr != self.address:
-            self.fail("Received a watch for an unexpected address:  Expected %s, got %s" % (self.address, addr))
+            self.fail(
+                f"Received a watch for an unexpected address:  Expected {self.address}, got {addr}"
+            )
+
 
         ## print("phase=%s, local=%d, remote=%d" % (self.phase, local, remote))
 

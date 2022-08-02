@@ -34,8 +34,7 @@ from system_test import TestCase, Qdrouterd, main_module, TIMEOUT, DIR, Process,
 
 
 CONNECTION_PROPERTIES_UNICODE_STRING = {'connection': 'properties', 'int_property': 6451}
-CONNECTION_PROPERTIES_SYMBOL = dict()
-CONNECTION_PROPERTIES_SYMBOL[symbol("connection")] = symbol("properties")
+CONNECTION_PROPERTIES_SYMBOL = {symbol("connection"): symbol("properties")}
 CONNECTION_PROPERTIES_BINARY = {b'client_identifier': b'policy_server'}
 
 
@@ -286,7 +285,7 @@ class RouterConfigTest(TestCase):
 
     def test_48_router_in_error(self):
         test_pass = False
-        with open(self.routers[0].outfile + '.out', 'r') as out_file:
+        with open(f'{self.routers[0].outfile}.out', 'r') as out_file:
             for line in out_file:
                 if "Exception: Cannot load configuration file test-router.conf: role='standalone' not allowed to connect to or accept connections from other routers." in line:
                     test_pass = True
@@ -294,7 +293,7 @@ class RouterConfigTest(TestCase):
         self.assertTrue(test_pass)
 
         test_pass = False
-        with open(self.routers[1].outfile + '.out', 'r') as out_file:
+        with open(f'{self.routers[1].outfile}.out', 'r') as out_file:
             for line in out_file:
                 if "Exception: Cannot load configuration file test-router-1.conf: role='standalone' not allowed to connect to or accept connections from other routers." in line:
                     test_pass = True
@@ -302,7 +301,7 @@ class RouterConfigTest(TestCase):
         self.assertTrue(test_pass)
 
         test_pass = False
-        with open(self.routers[2].outfile + '.out', 'r') as out_file:
+        with open(f'{self.routers[2].outfile}.out', 'r') as out_file:
             for line in out_file:
                 if "Exception: Cannot load configuration file test-router-2.conf: role='edge' only allowed with router mode='interior'" in line:
                     test_pass = True
@@ -310,7 +309,7 @@ class RouterConfigTest(TestCase):
         self.assertTrue(test_pass)
 
         test_pass = False
-        with open(self.routers[3].outfile + '.out', 'r') as out_file:
+        with open(f'{self.routers[3].outfile}.out', 'r') as out_file:
             for line in out_file:
                 if "Exception: Cannot load configuration file test-router-3.conf: role='inter-router' only allowed with router mode='interior'" in line:
                     test_pass = True
@@ -318,7 +317,7 @@ class RouterConfigTest(TestCase):
         self.assertTrue(test_pass)
 
         test_pass = False
-        with open(self.routers[4].outfile + '.out', 'r') as out_file:
+        with open(f'{self.routers[4].outfile}.out', 'r') as out_file:
             for line in out_file:
                 if "Exception: Cannot load configuration file test-router-4.conf: role='inter-router' only allowed with router mode='interior'" in line:
                     test_pass = True
@@ -326,7 +325,7 @@ class RouterConfigTest(TestCase):
         self.assertTrue(test_pass)
 
         test_pass = False
-        with open(self.routers[5].outfile + '.out', 'r') as out_file:
+        with open(f'{self.routers[5].outfile}.out', 'r') as out_file:
             for line in out_file:
                 if "Exception: Cannot load configuration file test-router-5.conf: role='standalone' not allowed to connect to or accept connections from other routers." in line:
                     test_pass = True
@@ -335,7 +334,7 @@ class RouterConfigTest(TestCase):
 
         error_string = "Configuration: Invalid cost (-1) specified. Minimum value for cost is 1 and maximum value is 2147483647"
         test_pass = False
-        with open(self.routers[6].outfile + '.out', 'r') as out_file:
+        with open(f'{self.routers[6].outfile}.out', 'r') as out_file:
             for line in out_file:
                 if error_string in line:
                     test_pass = True
@@ -343,7 +342,7 @@ class RouterConfigTest(TestCase):
         self.assertTrue(test_pass)
 
         test_pass = False
-        with open(self.routers[7].outfile + '.out', 'r') as out_file:
+        with open(f'{self.routers[7].outfile}.out', 'r') as out_file:
             for line in out_file:
                 if error_string in line:
                     test_pass = True
@@ -352,7 +351,7 @@ class RouterConfigTest(TestCase):
 
         error_string = "Configuration: Invalid cost (2147483648) specified. Minimum value for cost is 1 and maximum value is 2147483647"
         test_pass = False
-        with open(self.routers[8].outfile + '.out', 'r') as out_file:
+        with open(f'{self.routers[8].outfile}.out', 'r') as out_file:
             for line in out_file:
                 if error_string in line:
                     test_pass = True
@@ -360,7 +359,7 @@ class RouterConfigTest(TestCase):
         self.assertTrue(test_pass)
 
         test_pass = False
-        with open(self.routers[9].outfile + '.out', 'r') as out_file:
+        with open(f'{self.routers[9].outfile}.out', 'r') as out_file:
             for line in out_file:
                 if error_string in line:
                     test_pass = True
@@ -403,7 +402,7 @@ class OneRouterTest(TestCase):
         try:
             p.teardown()
         except Exception as e:
-            raise Exception(out if out else str(e))
+            raise Exception(out or str(e))
         return out
 
     def test_01_listen_error(self):
@@ -415,15 +414,15 @@ class OneRouterTest(TestCase):
         self.assertEqual(1, r.wait())
 
     def test_02_pre_settled(self):
-        addr = self.address + '/closest/' + str(OneRouterTest.closest_count)
+        addr = f'{self.address}/closest/{str(OneRouterTest.closest_count)}'
         OneRouterTest.closest_count += 1
         test = PreSettled(addr, n_messages=10)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_03_multicast_unsettled(self) :
+    def test_03_multicast_unsettled(self):
         n_receivers = 5
-        addr = self.address + '/multicast/1'
+        addr = f'{self.address}/multicast/1'
         test = MulticastUnsettled(addr, n_messages=10, n_receivers=5)
         test.run()
         self.assertIsNone(test.error)
@@ -431,22 +430,22 @@ class OneRouterTest(TestCase):
     # DISPATCH-1277. This test will fail with a policy but without the fix in policy_local.py
     # In other words, if the max-frame-size was 2147483647 and not 16384, this
     # test would fail.
-    def test_04_disposition_returns_to_closed_connection(self) :
-        addr = self.address + '/closest/' + str(OneRouterTest.closest_count)
+    def test_04_disposition_returns_to_closed_connection(self):
+        addr = f'{self.address}/closest/{str(OneRouterTest.closest_count)}'
         OneRouterTest.closest_count += 1
         test = DispositionReturnsToClosedConnection(addr, n_messages=100)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_05_sender_settles_first(self) :
-        addr = self.address + '/closest/' + str(OneRouterTest.closest_count)
+    def test_05_sender_settles_first(self):
+        addr = f'{self.address}/closest/{str(OneRouterTest.closest_count)}'
         OneRouterTest.closest_count += 1
         test = SenderSettlesFirst(addr, n_messages=100)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_06_propagated_disposition(self) :
-        addr = self.address + '/closest/' + str(OneRouterTest.closest_count)
+    def test_06_propagated_disposition(self):
+        addr = f'{self.address}/closest/{str(OneRouterTest.closest_count)}'
         OneRouterTest.closest_count += 1
         test = PropagatedDisposition(addr, n_messages=10)
         test.run()
@@ -457,14 +456,14 @@ class OneRouterTest(TestCase):
         Ensure a sending client never gets credit if there is no
         consumer present.
         """
-        addr = self.address + '/closest/' + str(OneRouterTest.closest_count)
+        addr = f'{self.address}/closest/{str(OneRouterTest.closest_count)}'
         OneRouterTest.closest_count += 1
         test = NoConsumerNoCredit(addr)
         test.run()
         self.assertIsNone(test.error)
 
-    def test_08_three_ack(self) :
-        addr = self.address + '/closest/' + str(OneRouterTest.closest_count)
+    def test_08_three_ack(self):
+        addr = f'{self.address}/closest/{str(OneRouterTest.closest_count)}'
         OneRouterTest.closest_count += 1
         test = ThreeAck(addr, n_messages=10)
         test.run()
@@ -602,12 +601,10 @@ class OneRouterTest(TestCase):
 
         results = node.query(type='io.skupper.router.connection', attribute_names=['properties']).results
 
-        found = False
-        for result in results:
-            if 'connection' in result[0]:
-                if result[0]['connection'] == 'properties':
-                    found = True
-                    break
+        found = any(
+            'connection' in result[0] and result[0]['connection'] == 'properties'
+            for result in results
+        )
 
         self.assertTrue(found)
 
@@ -659,9 +656,9 @@ class OneRouterTest(TestCase):
                 # Delete that connection and run another skmanage to see
                 # if the connection is gone.
                 if conn_properties.get('int_property'):
-                    identity = output.get("identity")
-                    if identity:
-                        update_command = 'UPDATE --type=connection adminStatus=deleted --id=' + identity
+                    if identity := output.get("identity"):
+                        update_command = f'UPDATE --type=connection adminStatus=deleted --id={identity}'
+
                         try:
                             outputs = json.loads(self.run_skmanage(update_command))
                         except Exception as e:
@@ -747,9 +744,7 @@ class RouterProxy:
             response = []
             anames = bd['attributeNames']
             for row in bd['results']:
-                cols = {}
-                for i in range(len(row)):
-                    cols[anames[i]] = row[i]
+                cols = {anames[i]: row[i] for i in range(len(row))}
                 response.append(Entity(ap['statusCode'], ap['statusDescription'], cols))
             return response
 
@@ -933,13 +928,11 @@ class SemanticsClosest(MessagingHandler):
 
     def check_if_done(self):
         if self.n_received_a + self.n_received_b + self.n_received_c == self.num_messages\
-                and self.n_received_b != 0 and self.n_received_c != 0:
+                    and self.n_received_b != 0 and self.n_received_c != 0:
             self.rx_set.sort()
-            # print self.rx_set
-            all_messages_received = True
-            for i in range(self.num_messages):
-                if not i == self.rx_set[i]:
-                    all_messages_received = False
+            all_messages_received = all(
+                i == self.rx_set[i] for i in range(self.num_messages)
+            )
 
             if all_messages_received:
                 self.timer.cancel()
@@ -1098,7 +1091,9 @@ class ManagementNotImplemented(MessagingHandler):
             if event.message.properties['statusCode'] == 501:
                 self.bail(None)
             else:
-                self.bail("The return status code is %s. It should be 501" % str(event.message.properties['statusCode']))
+                self.bail(
+                    f"The return status code is {str(event.message.properties['statusCode'])}. It should be 501"
+                )
 
 
 class ManagementGetOperationsTest(MessagingHandler):
@@ -1149,7 +1144,9 @@ class ManagementGetOperationsTest(MessagingHandler):
                 else:
                     self.bail('io.skupper.router.router is not in the keys')
             else:
-                self.bail("The return status code is %s. It should be 200" % str(event.message.properties['statusCode']))
+                self.bail(
+                    f"The return status code is {str(event.message.properties['statusCode'])}. It should be 200"
+                )
 
 
 class ManagementTest(MessagingHandler):
@@ -1168,9 +1165,11 @@ class ManagementTest(MessagingHandler):
 
     def timeout(self):
         if not self.response1:
-            self.error = "Incorrect response received for message with correlation id C1"
-        if not self.response1:
-            self.error = self.error + "and incorrect response received for message with correlation id C2"
+            self.error = (
+                "Incorrect response received for message with correlation id C1"
+                + "and incorrect response received for message with correlation id C2"
+            )
+
         self.conn.close()
 
     def on_start(self, event):
@@ -1196,17 +1195,22 @@ class ManagementTest(MessagingHandler):
             self.sender.send(request)
 
     def on_message(self, event):
-        if event.receiver == self.receiver:
-            if event.message.correlation_id == "C1":
-                if event.message.properties['statusCode'] == 200 and \
-                        event.message.properties['statusDescription'] is not None \
-                        and event.message.body == []:
-                    self.response1 = True
-            elif event.message.correlation_id == "C2":
-                if event.message.properties['statusCode'] == 200 and \
-                        event.message.properties['statusDescription'] is not None \
-                        and event.message.body == []:
-                    self.response2 = True
+        if event.message.correlation_id == "C1":
+            if (
+                event.receiver == self.receiver
+                and event.message.properties['statusCode'] == 200
+                and event.message.properties['statusDescription'] is not None
+                and event.message.body == []
+            ):
+                self.response1 = True
+        elif event.message.correlation_id == "C2":
+            if (
+                event.receiver == self.receiver
+                and event.message.properties['statusCode'] == 200
+                and event.message.properties['statusDescription'] is not None
+                and event.message.body == []
+            ):
+                self.response2 = True
 
         if self.response1 and self.response2:
             self.error = None
@@ -1224,20 +1228,17 @@ class CustomTimeout:
         self.parent = parent
 
     def addr_text(self, addr):
-        if not addr:
-            return ""
-        return addr[1:]
+        return addr[1:] if addr else ""
 
     def on_timer_task(self, event):
         local_node = Node.connect(self.parent.address, timeout=TIMEOUT)
 
         res = local_node.query('io.skupper.router.router.address')
         name = res.attribute_names.index('name')
-        found = False
-        for results in res.results:
-            if "balanced.1" == self.addr_text(results[name]):
-                found = True
-                break
+        found = any(
+            self.addr_text(results[name]) == "balanced.1"
+            for results in res.results
+        )
 
         if found:
             self.parent.cancel_custom()
@@ -1296,12 +1297,11 @@ class SemanticsBalanced(MessagingHandler):
 
     def check_if_done(self):
         if self.n_received_a + self.n_received_b + self.n_received_c == self.num_messages and \
-                self.n_received_a > 0 and self.n_received_b > 0 and self.n_received_c > 0:
+                    self.n_received_a > 0 and self.n_received_b > 0 and self.n_received_c > 0:
             self.rx_set.sort()
-            all_messages_received = True
-            for i in range(self.num_messages):
-                if not i == self.rx_set[i]:
-                    all_messages_received = False
+            all_messages_received = all(
+                i == self.rx_set[i] for i in range(self.num_messages)
+            )
 
             if all_messages_received:
                 self.timer.cancel()
@@ -1366,10 +1366,8 @@ class PreSettled (MessagingHandler) :
         self.receiver.flow(self.n_messages)
         self.test_timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
 
-    def on_sendable(self, event) :
-        while self.n_sent < self.n_messages :
-            if event.sender.credit < 1 :
-                break
+    def on_sendable(self, event):
+        while self.n_sent < self.n_messages and event.sender.credit >= 1:
             msg = Message(body=self.n_sent)
             # Presettle the delivery.
             dlv = self.sender.send(msg)
@@ -1403,7 +1401,7 @@ class SendPresettledAfterReceiverCloses:
 
         if has_address:
             if self.num_tries == self.parent.max_tries:
-                self.parent.bail("Address %s is still in routing table" % owning_addr)
+                self.parent.bail(f"Address {owning_addr} is still in routing table")
             else:
                 self.parent.schedule_send_timer()
         else:
@@ -1434,14 +1432,13 @@ class PresettledCustomTimeout:
         # proton buffers.
         if deliveries_dropped_diff == self.parent.n_messages - self.parent.max_receive:
             self.parent.bail(None)
+        elif self.num_tries == self.parent.max_tries:
+            self.parent.bail("Messages sent to the router is %d, "
+                             "Messages dropped by the router is %d" %
+                             (self.parent.n_messages,
+                              deliveries_dropped_diff))
         else:
-            if self.num_tries == self.parent.max_tries:
-                self.parent.bail("Messages sent to the router is %d, "
-                                 "Messages dropped by the router is %d" %
-                                 (self.parent.n_messages,
-                                  deliveries_dropped_diff))
-            else:
-                self.parent.schedule_custom_timer()
+            self.parent.schedule_custom_timer()
 
 
 class DroppedPresettledTest(MessagingHandler):
@@ -1470,11 +1467,9 @@ class DroppedPresettledTest(MessagingHandler):
         self.timer = None
         self.begin_dropped_presettled_count = begin_dropped_presettled_count
         self.str1 = "0123456789abcdef"
-        self.msg_str = ""
         self.max_tries = 10
         self.reactor = None
-        for i in range(8192):
-            self.msg_str += self.str1
+        self.msg_str = "".join(self.str1 for _ in range(8192))
 
     def schedule_custom_timer(self):
         self.custom_timer = self.reactor.schedule(0.5, PresettledCustomTimeout(self))
@@ -1545,16 +1540,16 @@ class MulticastUnsettled (MessagingHandler) :
                  addr,
                  n_messages,
                  n_receivers
-                 ) :
+                 ):
         super(MulticastUnsettled, self) . __init__(auto_accept=False, prefetch=n_messages)
         self.addr        = addr
         self.n_messages  = n_messages
         self.n_receivers = n_receivers
 
         self.sender     = None
-        self.receivers  = list()
+        self.receivers = []
         self.n_sent     = 0
-        self.n_received = list()
+        self.n_received = []
         self.error      = None
         self.test_timer = None
         self.bailing    = False
@@ -1575,8 +1570,11 @@ class MulticastUnsettled (MessagingHandler) :
     def on_start(self, event):
         print(self.addr)
         self.recv_conn = event.container.connect(self.addr)
-        for i in range(self.n_receivers) :
-            rcvr = event.container.create_receiver(self.recv_conn, self.addr, name="receiver_" + str(i))
+        for i in range(self.n_receivers):
+            rcvr = event.container.create_receiver(
+                self.recv_conn, self.addr, name=f"receiver_{str(i)}"
+            )
+
             rcvr.flow(self.n_messages)
         self.test_timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
 
@@ -1589,10 +1587,8 @@ class MulticastUnsettled (MessagingHandler) :
                 self.send_conn = event.container.connect(self.addr)
                 self.sender = event.container.create_sender(self.send_conn, self.addr)
 
-    def on_sendable(self, event) :
-        while self.n_sent < self.n_messages :
-            if event.sender.credit < 1 :
-                break
+    def on_sendable(self, event):
+        while self.n_sent < self.n_messages and event.sender.credit >= 1:
             for i in range(self.n_messages) :
                 msg = Message(body=i)
                 # The sender does not settle, but the
@@ -1659,14 +1655,12 @@ class DispositionReturnsToClosedConnection (MessagingHandler) :
         self.receiver = event.container.create_receiver(self.recv_conn, self.addr)
         self.test_timer = event.reactor.schedule(TIMEOUT, TestTimeout(self))
 
-    def on_sendable(self, event) :
+    def on_sendable(self, event):
 
         if not self.send_conn :
             return
 
-        while self.n_sent < self.n_messages :
-            if event.sender.credit < 1 :
-                break
+        while self.n_sent < self.n_messages and event.sender.credit >= 1:
             msg = Message(body=self.n_sent)
             self.sender.send(msg)
             self.n_sent += 1

@@ -42,8 +42,7 @@ class BuildPy(build_py):
 
 
 options = {}
-destdir = environ.get("DESTDIR")
-if destdir:
+if destdir := environ.get("DESTDIR"):
     options["install"] = {"root": destdir}
 
 setup(

@@ -134,7 +134,7 @@ class RouterAnnotationsSection:
         value += "to-override=%r " % self.to_override
         value += "ingress-router=%r " % self.ingress_router
         value += "trace=%r" % self.trace
-        return "RouterAnnotations(%s)" % value
+        return f"RouterAnnotations({value})"
 
 
 class InterRouterMessage(proton.Message):

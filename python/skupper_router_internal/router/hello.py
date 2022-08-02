@@ -50,7 +50,11 @@ class HelloProtocol:
         if msg.id == self.id:
             if not self.dup_reported and (msg.instance != self.container.instance):
                 self.dup_reported = True
-                self.container.log_hello(LOG_CRITICAL, "Detected Neighbor Router with a Duplicate ID - %s" % msg.id)
+                self.container.log_hello(
+                    LOG_CRITICAL,
+                    f"Detected Neighbor Router with a Duplicate ID - {msg.id}",
+                )
+
             return
         self.hellos[msg.id] = now
         if msg.is_seen(self.id):
@@ -64,4 +68,4 @@ class HelloProtocol:
         for key, last_seen in list(self.hellos.items()):
             if now - last_seen > self.hello_max_age:
                 self.hellos.pop(key)
-                self.container.log_hello(LOG_TRACE, "HELLO peer expired: %s" % key)
+                self.container.log_hello(LOG_TRACE, f"HELLO peer expired: {key}")

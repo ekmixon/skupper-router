@@ -171,18 +171,17 @@ class ThreadedTestClient:
 
     def __init__(self, tests, port, repeat=1):
         self._id = uuid.uuid4().hex
-        self._conn_addr = ("127.0.0.1:%s" % port)
+        self._conn_addr = f"127.0.0.1:{port}"
         self._tests = tests
         self._repeat = repeat
-        self._logger = Logger(title="TestClient: %s" % self._id,
-                              print_to_console=False)
+        self._logger = Logger(title=f"TestClient: {self._id}", print_to_console=False)
         self._thread = Thread(target=self._run)
         self.error = None
         self.count = 0
         self._thread.start()
 
     def _run(self):
-        self._logger.log("TestClient connecting on %s" % self._conn_addr)
+        self._logger.log(f"TestClient connecting on {self._conn_addr}")
         client = HTTPConnection(self._conn_addr, timeout=TIMEOUT)
         try:
             self._logger.log("TestClient connected")
@@ -190,44 +189,37 @@ class ThreadedTestClient:
                 self._logger.log("TestClient start request %d" % loop)
                 for op, tests in self._tests.items():
                     for req, _, val in tests:
-                        self._logger.log("TestClient sending %s %s request" % (op, req.target))
-                        req.send_request(client,
-                                         {"test-echo": "%s-%s-%s-%s" % (self._id,
-                                                                        loop,
-                                                                        op,
-                                                                        req.target)})
-                        self._logger.log("TestClient getting %s response" % op)
+                        self._logger.log(f"TestClient sending {op} {req.target} request")
+                        req.send_request(client, {"test-echo": f"{self._id}-{loop}-{op}-{req.target}"})
+                        self._logger.log(f"TestClient getting {op} response")
                         try:
                             rsp = client.getresponse()
                         except HTTPException as exc:
-                            self._logger.log("TestClient response failed: %s" % exc)
+                            self._logger.log(f"TestClient response failed: {exc}")
                             self.error = str(exc)
                             return
-                        self._logger.log("TestClient response %s received" % op)
+                        self._logger.log(f"TestClient response {op} received")
                         if val:
                             try:
                                 body = val.check_response(rsp)
                             except Exception as exc:
-                                self._logger.log("TestClient response invalid: %s"
-                                                 % str(exc))
-                                self.error = "client failed: %s" % str(exc)
+                                self._logger.log(f"TestClient response invalid: {str(exc)}")
+                                self.error = f"client failed: {str(exc)}"
                                 return
 
                             if req.method == "BODY" and body != b'':
-                                self._logger.log("TestClient response invalid: %s"
-                                                 % "body present!")
+                                self._logger.log('TestClient response invalid: body present!')
                                 self.error = "error: body present!"
                                 return
                         self.count += 1
-                        self._logger.log("TestClient request %s %s completed!" %
-                                         (op, req.target))
+                        self._logger.log(f"TestClient request {op} {req.target} completed!")
         finally:
             client.close()
-            self._logger.log("TestClient to %s closed" % self._conn_addr)
+            self._logger.log(f"TestClient to {self._conn_addr} closed")
 
     def wait(self, timeout=TIMEOUT):
         self._thread.join(timeout=timeout)
-        self._logger.log("TestClient %s shut down" % self._conn_addr)
+        self._logger.log(f"TestClient {self._conn_addr} shut down")
 
     def dump_log(self):
         self._logger.dump()
@@ -271,13 +263,11 @@ class TestServer:
                 cls._active_servers[server_port] = server
                 return server
             except OSError as e:
-                previous_server = cls._active_servers.get(server_port)
-                if previous_server:
+                if previous_server := cls._active_servers.get(server_port):
                     logging.log(logging.WARNING, "TestServer on port %d was not wait()'ed before", server_port)
                     previous_server.wait(timeout=1)  # die quickly, we don't have a whole day
                 exc = e  # remember the exception
-        else:
-            raise RuntimeError(f"TestServer failed to start due to port {server_port} already in use issue") from exc
+        raise RuntimeError(f"TestServer failed to start due to port {server_port} already in use issue") from exc
 
     def _run(self, tests, handler_cls):
         self._logger.log("TestServer listening on %s:%s" % self._server_addr)
@@ -294,8 +284,7 @@ class TestServer:
                 try:
                     server.handle_request()
                 except Exception as exc:
-                    self._logger.log("TestServer %s crash: %s" %
-                                     (self._server_addr, exc))
+                    self._logger.log(f"TestServer {self._server_addr} crash: {exc}")
                     self._logger.dump()
                     # do not bother raising here since this is an internal
                     # thread context:
@@ -324,8 +313,7 @@ class TestServer:
         for the duration of the entire testclass. The only place for server to graciously die is
         after processing an incoming request and closing the connection, but before accepting a new one.
         """
-        client = HTTPConnection("127.0.0.1:%s" % self._client_port,
-                                timeout=TIMEOUT)
+        client = HTTPConnection(f"127.0.0.1:{self._client_port}", timeout=TIMEOUT)
         try:
             client.putrequest("POST", "/SHUTDOWN")
             client.putheader("Content-Length", "0")
@@ -442,16 +430,16 @@ class ResponseValidator:
         body = rsp.read()
 
         if self.status and rsp.status != self.status:
-            raise Exception("Bad response code, expected %s got %s"
-                            % (self.status, rsp.status))
+            raise Exception(f"Bad response code, expected {self.status} got {rsp.status}")
         for key, value in self.expect_headers.items():
             if rsp.getheader(key) != value:
-                raise Exception("Missing/bad header (%s), expected %s got %s"
-                                % (key, value, rsp.getheader(key)))
+                raise Exception(
+                    f"Missing/bad header ({key}), expected {value} got {rsp.getheader(key)}"
+                )
+
 
         if self.expect_body and self.expect_body != body:
-            raise Exception("Bad response body expected %s got %s"
-                            % (self.expect_body, body))
+            raise Exception(f"Bad response body expected {self.expect_body} got {body}")
         return body
 
 
@@ -546,9 +534,8 @@ class CommonHttp1Edge2EdgeTest:
                  )],
         }
 
-        with TestServer.new_server(self.http_server11_port, self.http_listener11_port, TESTS_11) as server11, \
-             TestServer.new_server(self.http_server10_port, self.http_listener10_port, TESTS_10,
-                                   handler_cls=RequestHandler10) as server10:
+        with TestServer.new_server(self.http_server11_port, self.http_listener11_port, TESTS_11) as server11, TestServer.new_server(self.http_server10_port, self.http_listener10_port, TESTS_10,
+                                       handler_cls=RequestHandler10) as server10:
 
             self.EA2.wait_connectors()
 
@@ -556,12 +543,17 @@ class CommonHttp1Edge2EdgeTest:
             client_ct = 4  # per version
             clients = []
             for _ in range(client_ct):
-                clients.append(ThreadedTestClient(TESTS_11,
-                                                  self.http_listener11_port,
-                                                  repeat=repeat_ct))
-                clients.append(ThreadedTestClient(TESTS_10,
-                                                  self.http_listener10_port,
-                                                  repeat=repeat_ct))
+                clients.extend(
+                    (
+                        ThreadedTestClient(
+                            TESTS_11, self.http_listener11_port, repeat=repeat_ct
+                        ),
+                        ThreadedTestClient(
+                            TESTS_10, self.http_listener10_port, repeat=repeat_ct
+                        ),
+                    )
+                )
+
                 for client in clients:
                     client.wait()
                     try:
@@ -1146,50 +1138,64 @@ class CommonHttp1OneRouterTest:
             try:
                 body = val.check_response(rsp)
             except Exception as exc:
-                self.fail("request failed:  %s" % str(exc))
+                self.fail(f"request failed:  {str(exc)}")
 
             if req.method == "BODY":
                 self.assertEqual(b'', body)
 
     def test_001_get(self):
-        client = HTTPConnection("127.0.0.1:%s" % self.http_listener11_port,
-                                timeout=TIMEOUT)
+        client = HTTPConnection(
+            f"127.0.0.1:{self.http_listener11_port}", timeout=TIMEOUT
+        )
+
         self._do_request(client, self.TESTS_11["GET"])
         client.close()
 
     def test_002_head(self):
-        client = HTTPConnection("127.0.0.1:%s" % self.http_listener11_port,
-                                timeout=TIMEOUT)
+        client = HTTPConnection(
+            f"127.0.0.1:{self.http_listener11_port}", timeout=TIMEOUT
+        )
+
         self._do_request(client, self.TESTS_11["HEAD"])
         client.close()
 
     def test_003_post(self):
-        client = HTTPConnection("127.0.0.1:%s" % self.http_listener11_port,
-                                timeout=TIMEOUT)
+        client = HTTPConnection(
+            f"127.0.0.1:{self.http_listener11_port}", timeout=TIMEOUT
+        )
+
         self._do_request(client, self.TESTS_11["POST"])
         client.close()
 
     def test_004_put(self):
-        client = HTTPConnection("127.0.0.1:%s" % self.http_listener11_port,
-                                timeout=TIMEOUT)
+        client = HTTPConnection(
+            f"127.0.0.1:{self.http_listener11_port}", timeout=TIMEOUT
+        )
+
         self._do_request(client, self.TESTS_11["PUT"])
         client.close()
 
     def test_006_head_10(self):
-        client = HTTPConnection("127.0.0.1:%s" % self.http_listener10_port,
-                                timeout=TIMEOUT)
+        client = HTTPConnection(
+            f"127.0.0.1:{self.http_listener10_port}", timeout=TIMEOUT
+        )
+
         self._do_request(client, self.TESTS_10["HEAD"])
         client.close()
 
     def test_007_post_10(self):
-        client = HTTPConnection("127.0.0.1:%s" % self.http_listener10_port,
-                                timeout=TIMEOUT)
+        client = HTTPConnection(
+            f"127.0.0.1:{self.http_listener10_port}", timeout=TIMEOUT
+        )
+
         self._do_request(client, self.TESTS_10["POST"])
         client.close()
 
     def test_008_put_10(self):
-        client = HTTPConnection("127.0.0.1:%s" % self.http_listener10_port,
-                                timeout=TIMEOUT)
+        client = HTTPConnection(
+            f"127.0.0.1:{self.http_listener10_port}", timeout=TIMEOUT
+        )
+
         self._do_request(client, self.TESTS_10["PUT"])
         client.close()
 
@@ -1279,19 +1285,28 @@ class Http1ClientCloseTestsMixIn:
 
         TESTS = {
             "PUT": [
-                (RequestMsg("PUT", "/PUT/test_04_client_request_close",
-                            headers={
-                                "Content-Length": "500000",
-                                "Content-Type": "text/plain;charset=utf-8"
-                            },
-                            body=b'4' * (500000 - 19) + b'END OF TRANSMISSION'),
-                 ResponseMsg(201, reason="Created",
-                             headers={"Test-Header": "/PUT/test_04_client_request_close",
-                                      "Content-Length": "0"}),
-                 ResponseValidator(status=201)
-                 )]
-        }
-        TESTS.update(PING)
+                (
+                    RequestMsg(
+                        "PUT",
+                        "/PUT/test_04_client_request_close",
+                        headers={
+                            "Content-Length": "500000",
+                            "Content-Type": "text/plain;charset=utf-8",
+                        },
+                        body=b'4' * (500000 - 19) + b'END OF TRANSMISSION',
+                    ),
+                    ResponseMsg(
+                        201,
+                        reason="Created",
+                        headers={
+                            "Test-Header": "/PUT/test_04_client_request_close",
+                            "Content-Length": "0",
+                        },
+                    ),
+                    ResponseValidator(status=201),
+                )
+            ]
+        } | PING
 
         with TestServer.new_server(server_port=server_port,
                                    client_port=client_port,
@@ -1308,10 +1323,10 @@ class Http1ClientCloseTestsMixIn:
             #
 
             fake_request = b'PUT /PUT/test_04_client_request_close HTTP/1.1\r\n' \
-                + b'Content-Length: 500000\r\n' \
-                + b'Content-Type: text/plain;charset=utf-8\r\n' \
-                + b'\r\n' \
-                + b'?' * 50000
+                    + b'Content-Length: 500000\r\n' \
+                    + b'Content-Type: text/plain;charset=utf-8\r\n' \
+                    + b'\r\n' \
+                    + b'?' * 50000
             fake_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             fake_client.settimeout(5)
             fake_client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -1352,29 +1367,41 @@ class Http1ClientCloseTestsMixIn:
                  )]
         }
 
-        big_headers = dict([('Huge%s' % i, chr(ord(b'0') + i) * 8000)
-                            for i in range(10)])
+        big_headers = dict(
+            [(f'Huge{i}', chr(ord(b'0') + i) * 8000) for i in range(10)]
+        )
+
 
         TESTS = {
             "GET": [
-                (RequestMsg("GET", "/GET/test_05_client_response_close",
+                (
+                    RequestMsg(
+                        "GET",
+                        "/GET/test_05_client_response_close",
+                        headers={
+                            "Content-Length": "0",
+                            "Content-Type": "text/plain;charset=utf-8",
+                        },
+                    ),
+                    [
+                        ResponseMsg(100, reason="Continue", headers=big_headers),
+                        ResponseMsg(100, reason="Continue", headers=big_headers),
+                        ResponseMsg(100, reason="Continue", headers=big_headers),
+                        ResponseMsg(100, reason="Continue", headers=big_headers),
+                        ResponseMsg(
+                            200,
+                            reason="OK",
                             headers={
-                                "Content-Length": "0",
-                                "Content-Type": "text/plain;charset=utf-8"
-                            }),
-                 [ResponseMsg(100, reason="Continue", headers=big_headers),
-                  ResponseMsg(100, reason="Continue", headers=big_headers),
-                  ResponseMsg(100, reason="Continue", headers=big_headers),
-                  ResponseMsg(100, reason="Continue", headers=big_headers),
-                  ResponseMsg(200,
-                              reason="OK",
-                              headers={"Content-Length": 1000000,
-                                       "Content-Type": "text/plain;charset=utf-8"},
-                              body=b'?' * 1000000)],
-                 ResponseValidator(status=200)
-                 )]
-        }
-        TESTS.update(PING)
+                                "Content-Length": 1000000,
+                                "Content-Type": "text/plain;charset=utf-8",
+                            },
+                            body=b'?' * 1000000,
+                        ),
+                    ],
+                    ResponseValidator(status=200),
+                )
+            ]
+        } | PING
 
         with TestServer.new_server(server_port=server_port,
                                    client_port=client_port,
@@ -1391,9 +1418,9 @@ class Http1ClientCloseTestsMixIn:
             #
 
             fake_request = b'GET /GET/test_05_client_response_close HTTP/1.1\r\n' \
-                + b'Content-Length: 0\r\n' \
-                + b'Content-Type: text/plain;charset=utf-8\r\n' \
-                + b'\r\n'
+                    + b'Content-Length: 0\r\n' \
+                    + b'Content-Type: text/plain;charset=utf-8\r\n' \
+                    + b'\r\n'
             fake_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             fake_client.settimeout(TIMEOUT)
             fake_client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -1414,8 +1441,7 @@ class Http1CurlTestsMixIn:
     Test cases using curl as the command line client
     """
 
-    @unittest.skipIf(not _curl_ok(),
-                     "required curl version >= %s" % str(CURL_VERSION))
+    @unittest.skipIf(not _curl_ok(), f"required curl version >= {str(CURL_VERSION)}")
     def curl_get_test(self, host, port, server_port):
         """
         Use curl to get a resource
@@ -1446,31 +1472,26 @@ class Http1CurlTestsMixIn:
 
         with TestServer.new_server(server_port, port, CURL_TESTS) as server:
 
-            get_url = "http://%s:%s/GET/curl_get" % (host, port)
-            head_url = "http://%s:%s/HEAD/curl_head" % (host, port)
+            get_url = f"http://{host}:{port}/GET/curl_get"
+            head_url = f"http://{host}:{port}/HEAD/curl_head"
 
             status, out, err = run_curl(["--http1.1", "-G", get_url])
             self.assertEqual(0, status, "curl error '%s' '%s'" % (out, err))
-            self.assertIn("END OF TRANSMISSION", out, "Unexpected out=%s (err=%s)"
-                          % (out, err))
+            self.assertIn("END OF TRANSMISSION", out, f"Unexpected out={out} (err={err})")
 
             status, out, err = run_curl(["--http1.1", "-I", head_url])
             self.assertEqual(0, status, "curl error '%s' '%s'" % (out, err))
-            self.assertIn("App-Header-2", out, "Unexpected out=%s (err=%s)"
-                          % (out, err))
+            self.assertIn("App-Header-2", out, f"Unexpected out={out} (err={err})")
 
             status, out, err = run_curl(["--http1.0", "-G", get_url])
             self.assertEqual(0, status, "curl error '%s' '%s'" % (out, err))
-            self.assertIn("END OF TRANSMISSION", out, "Unexpected out=%s (err=%s)"
-                          % (out, err))
+            self.assertIn("END OF TRANSMISSION", out, f"Unexpected out={out} (err={err})")
 
             status, out, err = run_curl(["--http1.1", "-G", get_url])
             self.assertEqual(0, status, "curl error '%s' '%s'" % (out, err))
-            self.assertIn("END OF TRANSMISSION", out, "Unexpected out=%s (err=%s)"
-                          % (out, err))
+            self.assertIn("END OF TRANSMISSION", out, f"Unexpected out={out} (err={err})")
 
-    @unittest.skipIf(not _curl_ok(),
-                     "required curl version >= %s" % str(CURL_VERSION))
+    @unittest.skipIf(not _curl_ok(), f"required curl version >= {str(CURL_VERSION)}")
     def curl_put_test(self, host, port, server_port):
         """
         Use curl to PUT a resource
@@ -1500,8 +1521,8 @@ class Http1CurlTestsMixIn:
 
         with TestServer.new_server(server_port, port, CURL_TESTS) as server:
 
-            put_url = "http://%s:%s/PUT/curl_put" % (host, port)
-            head_url = "http://%s:%s/HEAD/curl_head" % (host, port)
+            put_url = f"http://{host}:{port}/PUT/curl_put"
+            head_url = f"http://{host}:{port}/HEAD/curl_head"
 
             status, out, err = run_curl(["--http1.1", "-T", ".", put_url],
                                         input="Mary had a little pug."
@@ -1512,16 +1533,14 @@ class Http1CurlTestsMixIn:
 
             status, out, err = run_curl(["--http1.1", "-I", head_url])
             self.assertEqual(0, status, "curl error '%s' '%s'" % (out, err))
-            self.assertIn("App-Header-2", out, "Unexpected out=%s (err=%s)"
-                          % (out, err))
+            self.assertIn("App-Header-2", out, f"Unexpected out={out} (err={err})")
 
             status, out, err = run_curl(["--http1.1", "-T", ".", put_url],
                                         input="Ph'nglui mglw'nafh Cthulhu"
                                         "\nR'lyeh wgah'nagl fhtagn")
             self.assertEqual(0, status, "curl error '%s' '%s'" % (out, err))
 
-    @unittest.skipIf(not _curl_ok(),
-                     "required curl version >= %s" % str(CURL_VERSION))
+    @unittest.skipIf(not _curl_ok(), f"required curl version >= {str(CURL_VERSION)}")
     def curl_post_test(self, host, port, server_port):
         """
         Use curl to post to a resource
@@ -1554,23 +1573,20 @@ class Http1CurlTestsMixIn:
 
         with TestServer.new_server(server_port, port, CURL_TESTS) as server:
 
-            post_url = "http://%s:%s/POST/curl_post" % (host, port)
-            get_url = "http://%s:%s/GET/curl_get" % (host, port)
+            post_url = f"http://{host}:{port}/POST/curl_post"
+            get_url = f"http://{host}:{port}/GET/curl_get"
 
             status, out, err = run_curl(["--http1.1", "-F", "name=Skupper",
                                          "-F", "breed=Pug", post_url])
             self.assertEqual(0, status, "curl error '%s' '%s'" % (out, err))
-            self.assertIn("END OF TRANSMISSION", out, "Unexpected out=%s (err=%s)"
-                          % (out, err))
+            self.assertIn("END OF TRANSMISSION", out, f"Unexpected out={out} (err={err})")
 
             status, out, err = run_curl(["--http1.1", "-G", get_url])
             self.assertEqual(0, status, "curl error '%s' '%s'" % (out, err))
-            self.assertIn("0123456789", out, "Unexpected out=%s (err=%s)"
-                          % (out, err))
+            self.assertIn("0123456789", out, f"Unexpected out={out} (err={err})")
 
             status, out, err = run_curl(["--http1.1", "-F", "name=Coco",
                                          "-F", "breed=French Bulldog",
                                          post_url])
             self.assertEqual(0, status, "curl error '%s' '%s'" % (out, err))
-            self.assertIn("END OF TRANSMISSION", out, "Unexpected out=%s (err=%s)"
-                          % (out, err))
+            self.assertIn("END OF TRANSMISSION", out, f"Unexpected out={out} (err={err})")

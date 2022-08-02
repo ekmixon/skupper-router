@@ -70,14 +70,14 @@ class RouterTestHttp(TestCase):
         try:
             p.teardown()
         except Exception as e:
-            raise Exception(out if out else str(e))
+            raise Exception(out or str(e))
         return out
 
     def assert_get(self, url):
-        self.assertEqual('HTTP test\n', self.get("%s/system_tests_http.txt" % url))
+        self.assertEqual('HTTP test\n', self.get(f"{url}/system_tests_http.txt"))
 
     def assert_get_cert(self, url):
-        self.assertEqual('HTTP test\n', self.get_cert("%s/system_tests_http.txt" % url))
+        self.assertEqual('HTTP test\n', self.get_cert(f"{url}/system_tests_http.txt"))
 
     def test_listen_error(self):
         """Make sure a router exits if an initial HTTP listener fails, doesn't hang"""
@@ -126,12 +126,12 @@ class RouterTestHttp(TestCase):
 
         # Perform a GET request on the http_delete_listen_port_1 just to make
         # sure that it is up and running.
-        url_1 = "%s/system_tests_http.txt" % "http://localhost:%d" % http_delete_listen_port_1
+        url_1 = 'http://localhost:%d/system_tests_http.txt' % http_delete_listen_port_1
         out = self.get(url_1, use_ca=False)
 
         # Perform a GET request on the http_delete_listen_port_2 just to make
         # sure that it is up and running.
-        url_2 = "%s/system_tests_http.txt" % "http://localhost:%d" % http_delete_listen_port_2
+        url_2 = 'http://localhost:%d/system_tests_http.txt' % http_delete_listen_port_2
         out = self.get(url_2, use_ca=False)
 
         # Now both http_delete_listen_port_1 and http_delete_listen_port_2
@@ -286,7 +286,7 @@ class RouterTestHttp(TestCase):
 
         def listener(**kwargs):
             args = dict(kwargs)
-            args.update({'port': self.get_port()})
+            args['port'] = self.get_port()
             return ('listener', args)
 
         name = 'delete-me'
@@ -312,7 +312,7 @@ class RouterTestHttp(TestCase):
         def address():
             return r.addresses[4]
 
-        self.assert_get("https://localhost:%s" % r.ports[0])
+        self.assert_get(f"https://localhost:{r.ports[0]}")
         # requireSsl=false Allows simple-ssl HTTP
 
         # DISPATCH-1513: libwebsockets versions 3.2.0 introduces a new flag called
@@ -321,14 +321,19 @@ class RouterTestHttp(TestCase):
         # Since this flag is not available before lws 3.2.0 we need
         # to selectively disable this check
         if skupper_router_site.LIBWEBSOCKETS_VERSION >= (3, 2, 0):
-            self.assert_get("http://localhost:%s" % r.ports[0])
+            self.assert_get(f"http://localhost:{r.ports[0]}")
 
-        self.assert_get("https://localhost:%s" % r.ports[1])
+        self.assert_get(f"https://localhost:{r.ports[1]}")
         # requireSsl=True does not allow simple-ssl HTTP
-        self.assertRaises(Exception, self.assert_get, "http://localhost:%s" % r.ports[1])
+        self.assertRaises(Exception, self.assert_get, f"http://localhost:{r.ports[1]}")
 
         # authenticatePeer=True requires a client cert
-        self.assertRaises((URLError, ssl.SSLError), self.assert_get, "https://localhost:%s" % r.ports[2])
+        self.assertRaises(
+            (URLError, ssl.SSLError),
+            self.assert_get,
+            f"https://localhost:{r.ports[2]}",
+        )
+
 
         # Provide client cert
         self.assert_get_cert("https://localhost:%d" % r.ports[2])
@@ -343,7 +348,15 @@ class RouterTestHttp(TestCase):
             mgmt.delete(long_type, name=name)
 
             # Make sure that the listener got deleted.
-            ret_val = retry(lambda: self.is_get_request_failing("https://localhost:%s/system_tests_http.txt" % r.ports[3], use_get_cert=True), timeout=10, delay=2)
+            ret_val = retry(
+                lambda: self.is_get_request_failing(
+                    f"https://localhost:{r.ports[3]}/system_tests_http.txt",
+                    use_get_cert=True,
+                ),
+                timeout=10,
+                delay=2,
+            )
+
             self.assertTrue(ret_val)
 
             # Make sure other ports are working normally after the above delete.

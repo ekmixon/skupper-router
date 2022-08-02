@@ -168,26 +168,10 @@ class MulticastLinearTest(TestCase):
         ]
 
     def _get_alloc_stats(self, router, stats):
-        # return a map of the current allocator counters for each entity type
-        # name in stats
-
-        #
-        # 57: END = [{u'heldByThreads': int32(384), u'typeSize': int32(536),
-        # u'transferBatchSize': int32(64), u'globalFreeListMax': int32(0),
-        # u'batchesRebalancedToGlobal': int32(774), u'typeName':
-        # u'qd_buffer_t', u'batchesRebalancedToThreads': int32(736),
-        # u'totalFreeToHeap': int32(0), u'totalAllocFromHeap': int32(2816),
-        # u'localFreeListMax': int32(128), u'type':
-        # u'io.skupper.router.allocator', u'identity':
-        # u'allocator/qd_buffer_t', u'name': u'allocator/qd_buffer_t'}]
-
-        d = dict()
         mgmt = router.management
         atype = 'io.skupper.router.allocator'
         q = mgmt.query(type=atype).get_dicts()
-        for name in stats:
-            d[name] = next(a for a in q if a['typeName'] == name)
-        return d
+        return {name: next(a for a in q if a['typeName'] == name) for name in stats}
 
     def _check_for_leaks(self):
         for r in self.routers:
@@ -211,7 +195,7 @@ class MulticastLinearTest(TestCase):
 
     def _presettled_large_msg_rx_detach(self, config, count, drop_clients):
         # detach receivers during receive
-        body = " MCAST PRESETTLED LARGE RX DETACH " + LARGE_PAYLOAD
+        body = f" MCAST PRESETTLED LARGE RX DETACH {LARGE_PAYLOAD}"
         test = MulticastPresettledRxFail(config, count,
                                          drop_clients,
                                          detach=True,
@@ -225,7 +209,7 @@ class MulticastLinearTest(TestCase):
 
     def _presettled_large_msg_rx_close(self, config, count, drop_clients):
         # close receiver connections during receive
-        body = " MCAST PRESETTLED LARGE RX CLOSE " + LARGE_PAYLOAD
+        body = f" MCAST PRESETTLED LARGE RX CLOSE {LARGE_PAYLOAD}"
         test = MulticastPresettledRxFail(config, count,
                                          drop_clients,
                                          detach=False,
@@ -239,7 +223,7 @@ class MulticastLinearTest(TestCase):
 
     def _unsettled_large_msg_rx_detach(self, config, count, drop_clients):
         # detach receivers during the test
-        body = " MCAST UNSETTLED LARGE RX DETACH " + LARGE_PAYLOAD
+        body = f" MCAST UNSETTLED LARGE RX DETACH {LARGE_PAYLOAD}"
         test = MulticastUnsettledRxFail(self.config, count, drop_clients, detach=True, body=body)
         test.run()
         self.assertIsNone(test.error)
@@ -250,7 +234,7 @@ class MulticastLinearTest(TestCase):
 
     def _unsettled_large_msg_rx_close(self, config, count, drop_clients):
         # close receiver connections during test
-        body = " MCAST UNSETTLED LARGE RX CLOSE " + LARGE_PAYLOAD
+        body = f" MCAST UNSETTLED LARGE RX CLOSE {LARGE_PAYLOAD}"
         test = MulticastUnsettledRxFail(self.config, count, drop_clients, detach=False, body=body)
         test.run()
         self.assertIsNone(test.error)
@@ -271,14 +255,14 @@ class MulticastLinearTest(TestCase):
 
     def test_51_presettled_mixed_large_msg(self):
         # Same as above, but large message bodies (mixed sender settle mode)
-        body = " MCAST MAYBE PRESETTLED LARGE " + LARGE_PAYLOAD
+        body = f" MCAST MAYBE PRESETTLED LARGE {LARGE_PAYLOAD}"
         test = MulticastPresettled(self.config, 11, body, SendMixed())
         test.run()
         self.assertIsNone(test.error)
 
     def test_52_presettled_large_msg(self):
         # Same as above, (pre-settled sender settle mode)
-        body = " MCAST PRESETTLED LARGE " + LARGE_PAYLOAD
+        body = f" MCAST PRESETTLED LARGE {LARGE_PAYLOAD}"
         test = MulticastPresettled(self.config, 13, body, SendPresettled())
         test.run()
         self.assertIsNone(test.error)
@@ -294,7 +278,7 @@ class MulticastLinearTest(TestCase):
 
     def test_61_unsettled_3ack_large_msg(self):
         # Same as above but with multiframe streaming
-        body = " MCAST UNSETTLED LARGE " + LARGE_PAYLOAD
+        body = f" MCAST UNSETTLED LARGE {LARGE_PAYLOAD}"
         test = MulticastUnsettled3Ack(self.config, 11, body=body)
         test.run()
         self.assertIsNone(test.error)
@@ -305,7 +289,7 @@ class MulticastLinearTest(TestCase):
                                  count,
                                  outcomes,
                                  expected):
-        body = " MCAST UNSETTLED 3ACK OUTCOMES " + LARGE_PAYLOAD
+        body = f" MCAST UNSETTLED 3ACK OUTCOMES {LARGE_PAYLOAD}"
         test = MulticastUnsettled3Ack(self.config,
                                       count,
                                       body,
@@ -368,13 +352,13 @@ class MulticastLinearTest(TestCase):
 
     def test_71_unsettled_1ack_large_msg(self):
         # Same as above but with multiframe streaming
-        body = " MCAST UNSETTLED 1ACK LARGE " + LARGE_PAYLOAD
+        body = f" MCAST UNSETTLED 1ACK LARGE {LARGE_PAYLOAD}"
         test = MulticastUnsettled1Ack(self.config, 10, body)
         test.run()
         self.assertIsNone(test.error)
 
     def test_80_unsettled_3ack_message_annotations(self):
-        body = " MCAST UNSETTLED 3ACK LARGE MESSAGE ANNOTATIONS " + LARGE_PAYLOAD
+        body = f" MCAST UNSETTLED 3ACK LARGE MESSAGE ANNOTATIONS {LARGE_PAYLOAD}"
         test = MulticastUnsettled3AckMA(self.config, 10, body)
         test.run()
         self.assertIsNone(test.error)
@@ -619,9 +603,9 @@ class MulticastBase(MessagingHandler, metaclass=abc.ABCMeta):
         clean = False
         while not clean:
             clean = True
+            atype = 'io.skupper.router.router.address'
             for cfg in self.config:
                 mgmt = cfg['router'].management
-                atype = 'io.skupper.router.router.address'
                 addrs = mgmt.query(type=atype).get_dicts()
                 if any(self.topic in a['name'] for a in addrs):
                     clean = False
@@ -649,7 +633,7 @@ class MulticastPresettled(MulticastBase):
         self.expected_settled = 0
         self.sender_settled = 0
         self.done_count = 0
-        self.unsettled_deliveries = dict()
+        self.unsettled_deliveries = {}
 
     def create_receiver(self, container, conn, source, name):
         return container.create_receiver(conn, source=source, name=name,
@@ -661,7 +645,7 @@ class MulticastPresettled(MulticastBase):
 
     def do_send(self, sender):
         for i in range(self.msg_count):
-            msg = Message(body=" %s -> %s:%s" % (sender.name, i, self.body))
+            msg = Message(body=f" {sender.name} -> {i}:{self.body}")
             dlv = sender.send(msg)
             # settled before sending out the message
             dlv.settle()
@@ -719,14 +703,12 @@ class MulticastPresettledRxFail(MulticastPresettled):
         self.detach = detach
 
     def check_if_done(self):
-        # Verify each receiver got the expected number of messages.
-        # Avoid waiting for dropped receivers.
-        done = True
         to_rcv = self.n_senders * self.msg_count
-        for name, count in self.c_received.items():
-            if name not in self.drop_clients:
-                if count != to_rcv:
-                    done = False
+        done = not any(
+            name not in self.drop_clients and count != to_rcv
+            for name, count in self.c_received.items()
+        )
+
         if done:
             self.done()
 
@@ -768,7 +750,7 @@ class MulticastUnsettled3Ack(MulticastBase):
 
     def do_send(self, sender):
         for i in range(self.msg_count):
-            msg = Message(body=" %s -> %s:%s" % (sender.name, i, self.body))
+            msg = Message(body=f" {sender.name} -> {i}:{self.body}")
             dlv = sender.send(msg)
             self.n_sent += 1
 
@@ -873,14 +855,12 @@ class MulticastUnsettledRxFail(MulticastUnsettled3Ack):
         self.detach = detach
 
     def check_if_done(self):
-        # Verify each receiver got the expected number of messages.
-        # Avoid waiting for dropped receivers.
-        done = True
         to_rcv = self.n_senders * self.msg_count
-        for name, count in self.c_received.items():
-            if name not in self.drop_clients:
-                if count != to_rcv:
-                    done = False
+        done = not any(
+            name not in self.drop_clients and count != to_rcv
+            for name, count in self.c_received.items()
+        )
+
         if done:
             self.done()
 
@@ -919,7 +899,7 @@ class MulticastUnsettled3AckMA(MulticastUnsettled3Ack):
 
     def do_send(self, sender):
         for i in range(self.msg_count):
-            msg = Message(body=" %s -> %s:%s" % (sender.name, i, self.body))
+            msg = Message(body=f" {sender.name} -> {i}:{self.body}")
             msg.annotations = self._huge_ma
             dlv = sender.send(msg)
             self.n_sent += 1

@@ -207,7 +207,7 @@ class TestNoCorrelationId(TestService):
         self.rejected = False
 
     def create_reply(self, message):
-        return Message(body=dict())
+        return Message(body={})
 
     def on_rejected(self, event):
         self.rejected = True
@@ -221,8 +221,7 @@ class TestOldCorrelationId(TestService):
         self.accepted = False
 
     def create_reply(self, message):
-        return Message(body=dict(),
-                       correlation_id="not going to match")
+        return Message(body={}, correlation_id="not going to match")
 
     def on_accepted(self, event):
         self.accepted = True

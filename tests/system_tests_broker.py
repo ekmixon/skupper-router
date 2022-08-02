@@ -40,8 +40,11 @@ class DistributedQueueTest(system_test.TestCase):  # pylint: disable=too-many-pu
         def setUpClass(cls):
             """Start 3 qpidd brokers, wait for them to be ready."""
             super(DistributedQueueTest, cls).setUpClass()
-            cls.qpidds = [cls.tester.qpidd('qpidd%s' % i, port=cls.tester.get_port(), wait=False)
-                          for i in range(3)]
+            cls.qpidds = [
+                cls.tester.qpidd(f'qpidd{i}', port=cls.tester.get_port(), wait=False)
+                for i in range(3)
+            ]
+
             for q in cls.qpidds:
                 q.wait_ready()
 
@@ -72,7 +75,7 @@ class DistributedQueueTest(system_test.TestCase):  # pylint: disable=too-many-pu
             for b, a in zip(r, cycle(send_addresses)):
                 msgr.put(message(address=a, body=b))
             msgr.flush()
-            messages = sorted(msgr.fetch().body for i in r)
+            messages = sorted(msgr.fetch().body for _ in r)
             msgr.flush()
             self.assertEqual(r, messages)
 
@@ -91,7 +94,7 @@ class DistributedQueueTest(system_test.TestCase):  # pylint: disable=too-many-pu
 
             def router(i):
                 """Create router<i> with waypoints to each broker."""
-                name = "router%s" % i
+                name = f"router{i}"
                 rconf = self.common_router_conf(name, mode='interior')
                 rconf += [
                     ('listener', {'port': self.get_port(), 'role': 'normal'}),
@@ -100,10 +103,11 @@ class DistributedQueueTest(system_test.TestCase):  # pylint: disable=too-many-pu
                     rconf += [
                         ('connector', {'name': q.name, 'port': q.port})]
                 return self.qdrouterd(name, rconf, wait=False)
+
             routers = [router(i) for i in range(len(self.qpidds))]
             for r in routers:
                 r.wait_ready()
-            addrs = [r.addresses[0] + "/" + self.testq for r in routers]
+            addrs = [f"{r.addresses[0]}/{self.testq}" for r in routers]
             self.verify_equal_spread(addrs, addrs)
 
 

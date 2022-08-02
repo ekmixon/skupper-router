@@ -106,14 +106,24 @@ class EdgeRouterTest(TestCase):
 
     def run_skstat(self, args, regexp=None, address=None, expect=Process.EXIT_OK):
         p = self.popen(
-            ['skstat', '--bus', str(address or self.router.addresses[0]),
-             '--timeout', str(TIMEOUT)] + args,
-            name='skstat-' + self.id(), stdout=PIPE, expect=expect,
-            universal_newlines=True)
+            [
+                'skstat',
+                '--bus',
+                str(address or self.router.addresses[0]),
+                '--timeout',
+                str(TIMEOUT),
+            ]
+            + args,
+            name=f'skstat-{self.id()}',
+            stdout=PIPE,
+            expect=expect,
+            universal_newlines=True,
+        )
+
 
         out = p.communicate()[0]
         assert p.returncode == 0, \
-            "skstat exit status %s, output:\n%s" % (p.returncode, out)
+                "skstat exit status %s, output:\n%s" % (p.returncode, out)
         if regexp:
             assert re.search(regexp, out,
                              re.I), "Can't find '%s' in '%s'" % (
@@ -121,13 +131,7 @@ class EdgeRouterTest(TestCase):
         return out
 
     def can_terminate(self):
-        if self.attempts == self.max_attempts:
-            return True
-
-        if self.success:
-            return True
-
-        return False
+        return True if self.attempts == self.max_attempts else bool(self.success)
 
     def run_int_b_edge_skstat(self):
         outs = self.run_skstat(['--edge'],
@@ -146,16 +150,14 @@ class EdgeRouterTest(TestCase):
                 self.success = True
 
     def schedule_int_a_skstat_test(self):
-        if self.attempts < self.max_attempts:
-            if not self.success:
-                Timer(self.timer_delay, self.run_int_a_edge_skstat).start()
-                self.attempts += 1
+        if self.attempts < self.max_attempts and not self.success:
+            Timer(self.timer_delay, self.run_int_a_edge_skstat).start()
+            self.attempts += 1
 
     def schedule_int_b_skstat_test(self):
-        if self.attempts < self.max_attempts:
-            if not self.success:
-                Timer(self.timer_delay, self.run_int_b_edge_skstat).start()
-                self.attempts += 1
+        if self.attempts < self.max_attempts and not self.success:
+            Timer(self.timer_delay, self.run_int_b_edge_skstat).start()
+            self.attempts += 1
 
     def test_01_active_flag(self):
         """
@@ -169,25 +171,17 @@ class EdgeRouterTest(TestCase):
         if self.skip['test_01'] :
             self.skipTest("Test skipped during development.")
 
-        success = False
         outs = self.run_skstat(['--edge'],
                                address=self.routers[0].addresses[0])
         lines = outs.split("\n")
-        for line in lines:
-            if "EA1" in line and "yes" in line:
-                success = True
+        success = any("EA1" in line and "yes" in line for line in lines)
         if not success:
             self.fail("Active edge connection not found not found for "
                       "interior router")
 
         outs = self.run_skstat(['--edge'],
                                address=self.routers[2].addresses[0])
-        conn_map_edge = dict()
-        #
-        # We dont know which interior router the edge will connect to.
-        #
-        conn_map_edge["INT.A"] = False
-        conn_map_edge["INT.B"] = False
+        conn_map_edge = {"INT.A": False, "INT.B": False}
         lines = outs.split("\n")
         for line in lines:
             if "INT.A" in line and "yes" in line:
@@ -1198,13 +1192,18 @@ class RouterTest(TestCase):
                          str(address or self.router.addresses[0]),
                          '--timeout', str(TIMEOUT)]
 
-        p = self.popen(popen_arg,
-                       name='skstat-' + self.id(), stdout=PIPE, expect=expect,
-                       universal_newlines=True)
+        p = self.popen(
+            popen_arg,
+            name=f'skstat-{self.id()}',
+            stdout=PIPE,
+            expect=expect,
+            universal_newlines=True,
+        )
+
 
         out = p.communicate()[0]
         assert p.returncode == 0, \
-            "skstat exit status %s, output:\n%s" % (p.returncode, out)
+                "skstat exit status %s, output:\n%s" % (p.returncode, out)
         if regexp:
             assert re.search(regexp, out,
                              re.I), "Can't find '%s' in '%s'" % (
@@ -1332,11 +1331,9 @@ class RouterTest(TestCase):
         outs = self.run_skstat(['-d', 'EA1', '-c'],
                                address=self.routers[0].addresses[0])
         parts = outs.split("\n")
-        conn_found = False
-        for part in parts:
-            if "INT.A" in part and "edge" in part and "out" in part:
-                conn_found = True
-                break
+        conn_found = any(
+            "INT.A" in part and "edge" in part and "out" in part for part in parts
+        )
 
         self.assertTrue(conn_found)
 
@@ -1345,11 +1342,9 @@ class RouterTest(TestCase):
         outs = self.run_skstat(['-d', 'EA1', '-c'],
                                address=self.routers[2].addresses[0])
         parts = outs.split("\n")
-        conn_found = False
-        for part in parts:
-            if "INT.A" in part and "edge" in part and "out" in part:
-                conn_found = True
-                break
+        conn_found = any(
+            "INT.A" in part and "edge" in part and "out" in part for part in parts
+        )
 
         self.assertTrue(conn_found)
 
@@ -1360,11 +1355,9 @@ class RouterTest(TestCase):
         outs = self.run_skstat(['--edge-router', 'EA1', '-c'],
                                address=self.routers[1].addresses[0])
         parts = outs.split("\n")
-        conn_found = False
-        for part in parts:
-            if "INT.A" in part and "edge" in part and "out" in part:
-                conn_found = True
-                break
+        conn_found = any(
+            "INT.A" in part and "edge" in part and "out" in part for part in parts
+        )
 
         self.assertTrue(conn_found)
 
@@ -1373,25 +1366,29 @@ class RouterTest(TestCase):
         # asking for all connections of an edge router EA1
         mgmt = QdManager(address=self.routers[0].addresses[0],
                          edge_router_id='EA1')
-        conn_found = False
         outs = mgmt.query('io.skupper.router.connection')
-        for out in outs:
-            if out['container'] == 'INT.A' and out['dir'] == "out" and out['role'] == "edge":
-                conn_found = True
-                break
+        conn_found = any(
+            out['container'] == 'INT.A'
+            and out['dir'] == "out"
+            and out['role'] == "edge"
+            for out in outs
+        )
+
         self.assertTrue(conn_found)
 
         # Makes a connection to an edge router and runs skstat
         # asking for all connections of an edge router EA1
         mgmt = QdManager(address=self.routers[2].addresses[0],
                          edge_router_id='EA1')
-        conn_found = False
         outs = mgmt.query('io.skupper.router.connection')
 
-        for out in outs:
-            if out['container'] == 'INT.A' and out['dir'] == "out" and out['role'] == "edge":
-                conn_found = True
-                break
+        conn_found = any(
+            out['container'] == 'INT.A'
+            and out['dir'] == "out"
+            and out['role'] == "edge"
+            for out in outs
+        )
+
         self.assertTrue(conn_found)
 
         # Makes a connection to an interior router INT.B and runs skstat
@@ -1400,13 +1397,15 @@ class RouterTest(TestCase):
         # interior router INT.A
         mgmt = QdManager(address=self.routers[1].addresses[0],
                          edge_router_id='EA1')
-        conn_found = False
         outs = mgmt.query('io.skupper.router.connection')
 
-        for out in outs:
-            if out['container'] == 'INT.A' and out['dir'] == "out" and out['role'] == "edge":
-                conn_found = True
-                break
+        conn_found = any(
+            out['container'] == 'INT.A'
+            and out['dir'] == "out"
+            and out['role'] == "edge"
+            for out in outs
+        )
+
         self.assertTrue(conn_found)
 
     def test_72_skstat_query_interior_from_edge(self):
@@ -1532,20 +1531,22 @@ class ConnectivityTest(MessagingHandler):
             self.agent_sender.send(self.proxy.query_connections())
 
     def on_message(self, event):
-        if event.receiver == self.reply_receiver:
-            response = self.proxy.response(event.message)
-            if response.status_code != 200:
-                self.error = "Unexpected error code from agent: %d - %s" % (response.status_code, response.status_description)
-            connections = response.results
-            count = 0
-            for conn in connections:
-                if conn.role == 'edge' and conn.container == self.edge_id:
-                    count += 1
-            if count != 1:
-                self.error = "Incorrect edge count for container-id.  Expected 1, got %d" % count
-            self.interior_conn.close()
-            self.edge_conn.close()
-            self.timer.cancel()
+        if event.receiver != self.reply_receiver:
+            return
+        response = self.proxy.response(event.message)
+        if response.status_code != 200:
+            self.error = "Unexpected error code from agent: %d - %s" % (response.status_code, response.status_description)
+        connections = response.results
+        count = sum(
+            conn.role == 'edge' and conn.container == self.edge_id
+            for conn in connections
+        )
+
+        if count != 1:
+            self.error = "Incorrect edge count for container-id.  Expected 1, got %d" % count
+        self.interior_conn.close()
+        self.edge_conn.close()
+        self.timer.cancel()
 
     def run(self):
         Container(self).run()
@@ -1669,7 +1670,7 @@ class MobileAddressAnonymousTest(MessagingHandler):
                 self.n_sent,  self.n_accepted, self.n_modified, self.n_released)
         else:
             self.error = "Did not get a settlement from the receiver. The test cannot be started until " \
-                         "a settlement to a test message is received"
+                             "a settlement to a test message is received"
         self.receiver_conn.close()
         self.sender_conn.close()
 
@@ -1682,19 +1683,20 @@ class MobileAddressAnonymousTest(MessagingHandler):
             self.test_started = True
 
     def on_message(self, event):
-        if event.receiver == self.receiver:
-            if self.ready:
-                self.n_rcvd += 1
+        if event.receiver == self.receiver and self.ready:
+            self.n_rcvd += 1
 
     def on_link_closed(self, event):
         # The receiver has closed. We will send messages again and
         # make sure they are released.
         if event.receiver == self.receiver:
-            for i in range(self.extra_msgs):
-                if self.large_msg:
-                    message = Message(body=self.body, properties=self.properties)
-                else:
-                    message = Message(body="Message %d" % self.n_sent)
+            for _ in range(self.extra_msgs):
+                message = (
+                    Message(body=self.body, properties=self.properties)
+                    if self.large_msg
+                    else Message(body="Message %d" % self.n_sent)
+                )
+
                 message.address = self.address
                 self.sender.send(message)
                 self.n_sent += 1
@@ -1707,20 +1709,22 @@ class MobileAddressAnonymousTest(MessagingHandler):
                 self.num_attempts += 1
         elif rdisp == "ACCEPTED" and not self.ready:
             self.ready = True
-            for i in range(self.num_msgs):
-                if self.large_msg:
-                    message = Message(body=self.body, properties=self.properties)
-                else:
-                    message = Message(body="Message %d" % self.n_sent)
+            for _ in range(self.num_msgs):
+                message = (
+                    Message(body=self.body, properties=self.properties)
+                    if self.large_msg
+                    else Message(body="Message %d" % self.n_sent)
+                )
+
                 message.address = self.address
                 self.sender.send(message)
                 self.n_sent += 1
-        elif rdisp == "ACCEPTED" and self.ready:
+        elif rdisp == "ACCEPTED":
             self.n_accepted += 1
             if self.n_accepted == self.num_msgs:
                 # Close the receiver after sending 300 messages
                 self.receiver.close()
-        elif rdisp == "RELEASED" and self.ready:
+        elif rdisp == "RELEASED":
             self.n_released += 1
         elif rdisp == "MODIFIED" and self.ready:
             self.n_modified += 1
@@ -1768,8 +1772,8 @@ class MobileAddressTest(MessagingHandler):
 
     def fail_exit(self, title):
         self.error = title
-        self.logger.log("MobileAddressTest result:ERROR: %s" % title)
-        self.logger.log("address %s     " % self.address)
+        self.logger.log(f"MobileAddressTest result:ERROR: {title}")
+        self.logger.log(f"address {self.address}     ")
         self.logger.log("n_sent       = %d. Expected total:%d normal=%d, extra=%d" %
                         (self.n_sent, (self.normal_count + self.extra_count), self.normal_count, self.extra_count))
         self.logger.log("n_rcvd       = %d. Expected %d" % (self.n_rcvd,       self.normal_count))
@@ -1783,7 +1787,7 @@ class MobileAddressTest(MessagingHandler):
         self.fail_exit("Timeout Expired")
 
     def on_start(self, event):
-        self.logger.log("on_start address=%s" % self.address)
+        self.logger.log(f"on_start address={self.address}")
         self.timer         = event.reactor.schedule(TIMEOUT, self)
         self.receiver_conn = event.container.connect(self.receiver_host)
         self.sender_conn   = event.container.connect(self.sender_host)
@@ -1821,12 +1825,15 @@ class MobileAddressTest(MessagingHandler):
         ldisp = str(event.delivery.local_state)
         if event.sender == self.sender:
             if rdisp is None:
-                self.logger.log("on_settled: WARNING: sender remote delivery state is None. Local state = %s." % ldisp)
+                self.logger.log(
+                    f"on_settled: WARNING: sender remote delivery state is None. Local state = {ldisp}."
+                )
+
             elif rdisp == "ACCEPTED":
                 self.n_accepted += 1
                 self.logger.log("on_settled sender: ACCEPTED %d (of %d)" %
                                 (self.n_accepted, self.normal_count))
-            elif rdisp in ('RELEASED', 'MODIFIED'):
+            elif rdisp in {'RELEASED', 'MODIFIED'}:
                 self.n_rel_or_mod += 1
                 self.logger.log("on_settled sender: %s %d (of %d)" %
                                 (rdisp, self.n_rel_or_mod, self.extra_count))
@@ -1840,7 +1847,7 @@ class MobileAddressTest(MessagingHandler):
                 # Close receiver and launch extra messages into the router network.
                 self.logger.log("on_settled sender: normal messages all accounted. receiver.close() then send extra messages")
                 self.receiver.close()
-                for i in range(self.extra_count):
+                for _ in range(self.extra_count):
                     message = Message(body="Message %d" % self.n_sent)
                     self.sender.send(message)
                     # Messages must be blasted to get them into the network before news
@@ -1855,14 +1862,17 @@ class MobileAddressTest(MessagingHandler):
 
             if self.n_rel_or_mod == self.extra_count:
                 # All extra messages are accounted. Exit with success.
-                result = "SUCCESS" if not self.warning else "WARNING"
-                self.logger.log("MobileAddressTest result:%s" % result)
+                result = "WARNING" if self.warning else "SUCCESS"
+                self.logger.log(f"MobileAddressTest result:{result}")
                 self.timer.cancel()
                 self.receiver_conn.close()
                 self.sender_conn.close()
 
         elif event.receiver == self.receiver:
-            self.logger.log("on_settled receiver: WARNING unexpected on_settled. remote: %s, local: %s" % (rdisp, ldisp))
+            self.logger.log(
+                f"on_settled receiver: WARNING unexpected on_settled. remote: {rdisp}, local: {ldisp}"
+            )
+
             self.warning = True
 
     def run(self):
@@ -1896,15 +1906,15 @@ class MobileAddressOneSenderTwoReceiversTest(MessagingHandler):
         self.error = None
         self.timer = None
         self.all_msgs_received = False
-        self.recvd_msg_bodies = dict()
+        self.recvd_msg_bodies = {}
         self.dup_msg = None
 
     def timeout(self):
         if self.dup_msg:
-            self.error = "Duplicate message %s received " % self.dup_msg
+            self.error = f"Duplicate message {self.dup_msg} received "
         else:
             self.error = "Timeout Expired - n_sent=%d n_rcvd=%d n_settled=%d n_released=%d addr=%s" % \
-                         (self.n_sent, (self.n_rcvd1 + self.n_rcvd2), self.n_settled, self.n_released, self.address)
+                             (self.n_sent, (self.n_rcvd1 + self.n_rcvd2), self.n_settled, self.n_released, self.address)
 
         self.receiver1_conn.close()
         self.receiver2_conn.close()
@@ -1951,7 +1961,7 @@ class MobileAddressOneSenderTwoReceiversTest(MessagingHandler):
         if self.n_settled == self.count:
             self.receiver1.close()
             self.receiver2.close()
-            for i in range(self.rel_count):
+            for _ in range(self.rel_count):
                 self.sender.send(Message(body="Message %d" % self.n_sent))
                 self.n_sent += 1
 

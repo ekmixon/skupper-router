@@ -61,11 +61,7 @@ class Http2TestTlsStandaloneRouter(Http2TestBase, CommonHttp2Tests, RouterTestSs
                                     'certFile': cls.ssl_file('server-certificate.pem'),
                                     'privateKeyFile': cls.ssl_file('server-private-key.pem'),
                                     'password': 'server-password'}
-        if cls.tls_v12:
-            cls.listener_ssl_profile['protocols'] = 'TLSv1.2'
-        else:
-            cls.listener_ssl_profile['protocols'] = 'TLSv1.3'
-
+        cls.listener_ssl_profile['protocols'] = 'TLSv1.2' if cls.tls_v12 else 'TLSv1.3'
         config = Qdrouterd.Config([
             ('router', {'mode': 'standalone', 'id': 'QDR'}),
             ('listener', {'port': cls.tester.get_port(), 'role': 'normal', 'host': '0.0.0.0'}),
@@ -341,7 +337,7 @@ class Http2TlsQ2TwoRouterTest(RouterTestPlainSaslCommon, Http2TestBase, RouterTe
     def test_q2_block_unblock(self):
         # curl  -X POST -H "Content-Type: multipart/form-data"  -F "data=@/home/gmurthy/opensource/test.jpg"
         # http://127.0.0.1:<port?>/upload --http2-prior-knowledge
-        address = self.router_qdra.http_addresses[0] + "/upload"
+        address = f"{self.router_qdra.http_addresses[0]}/upload"
         out = self.run_curl(address, args=self.get_all_curl_args(['-X', 'POST',
                                                                   '-H', 'Content-Type: multipart/form-data',
                                                                   '-F', 'data=@' + image_file('test.jpg')]))
@@ -549,7 +545,6 @@ class Http2TlsAuthenticatePeerOneRouter(Http2TestBase, RouterTestSslBase):
         cls.curl_args = ['--cacert', cls.ssl_file('ca-certificate.pem'), '--cert-type', 'PEM', '--tlsv1.3']
 
     @unittest.skipIf(skip_test(), "Python 3.7 or greater, Quart 0.13.0 or greater and curl needed to run http2 tests")
-    # Tests the HTTP2 head request
     def test_head_request(self):
         # Run curl 127.0.0.1:port --http2-prior-knowledge --head
         # This test should fail because the curl client is not presenting a client cert but the router has
@@ -562,9 +557,9 @@ class Http2TlsAuthenticatePeerOneRouter(Http2TestBase, RouterTestSslBase):
                                  timeout=5)
         conn_closed = False
         if "HTTP/2 stream 1 was not closed cleanly before end of the underlying stream" in err or \
-                "Connection reset by peer" in err:
+                    "Connection reset by peer" in err:
             conn_closed = True
-        self.assertTrue(conn_closed, msg="err is %s and out is %s" % (err, out))
+        self.assertTrue(conn_closed, msg=f"err is {err} and out is {out}")
 
         def find_tls_error_in_log_file():
             error = "SSL routines:tls_process_client_certificate:peer did not return a certificate"

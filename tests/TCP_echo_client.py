@@ -51,11 +51,11 @@ def split_chunk_for_display(raw_bytes):
     :return: display string
     """
     MAGIC_SIZE = 50  # Content repeats after chunks this big - used by echo client, too
-    if len(raw_bytes) > 2 * MAGIC_SIZE:
-        result = repr(raw_bytes[:MAGIC_SIZE]) + " ... " + repr(raw_bytes[-MAGIC_SIZE:])
-    else:
-        result = repr(raw_bytes)
-    return result
+    return (
+        f"{repr(raw_bytes[:MAGIC_SIZE])} ... {repr(raw_bytes[-MAGIC_SIZE:])}"
+        if len(raw_bytes) > 2 * MAGIC_SIZE
+        else repr(raw_bytes)
+    )
 
 
 class TcpEchoClient:
@@ -89,7 +89,7 @@ class TcpEchoClient:
         self._thread.start()
 
     def run(self):
-        self.logger.log("%s Client is starting up" % self.prefix)
+        self.logger.log(f"{self.prefix} Client is starting up")
         try:
             start_time = time.time()
             self.is_running = True
@@ -123,11 +123,8 @@ class TcpEchoClient:
                     if len(body_msg) > self.size:
                         body_msg = body_msg[:self.size]
                     payload_out.append(bytearray(body_msg.encode()))
-                # incoming payloads
-                payload_in = []
                 in_list_idx = 0  # current _in array being received
-                for i in range(self.count):
-                    payload_in.append(bytearray())
+                payload_in = [bytearray() for _ in range(self.count)]
             else:
                 # when count or size .LE. zero then just connect-disconnect
                 self.keep_running = False
@@ -149,13 +146,12 @@ class TcpEchoClient:
                     elapsed = time.time() - start_time
                     if elapsed > self.timeout:
                         self.exit_status = "%s Exiting due to timeout. Total sent= %d, total rcvd= %d" % \
-                                           (self.prefix, total_sent, total_rcvd)
+                                               (self.prefix, total_sent, total_rcvd)
                         break
                 for key, mask in sel.select(timeout=0.1):
                     sock = key.fileobj
                     if mask & selectors.EVENT_READ:
-                        recv_data = sock.recv(1024)
-                        if recv_data:
+                        if recv_data := sock.recv(1024):
                             total_rcvd = len(recv_data)
                             payload_in[in_list_idx].extend(recv_data)
                             if len(payload_in[in_list_idx]) == self.size:
@@ -167,43 +163,44 @@ class TcpEchoClient:
                                     # Verify the received data
                                     if payload_in != payload_out:
                                         for idxc in range(self.count):
-                                            if not payload_in[idxc] == payload_out[idxc]:
+                                            if (
+                                                payload_in[idxc]
+                                                != payload_out[idxc]
+                                            ):
                                                 for idxs in range(self.size):
                                                     ob = payload_out[idxc][idxs]
                                                     ib = payload_in[idxc][idxs]
                                                     if ob != ib:
                                                         self.error = "%s ERROR Rcvd message verify fail. row:%d, col:%d, " \
-                                                                     "expected:%s, actual:%s" \
-                                                                     % (self.prefix, idxc, idxs, repr(ob), repr(ib))
+                                                                         "expected:%s, actual:%s" \
+                                                                         % (self.prefix, idxc, idxs, repr(ob), repr(ib))
                                                         break
                                 else:
                                     out_ready_to_send = True
                                     sel.modify(sock, selectors.EVENT_READ | selectors.EVENT_WRITE)
                             elif len(payload_in[in_list_idx]) > self.size:
                                 self.error = "ERROR Received message too big. Expected:%d, actual:%d" % \
-                                             (self.size, len(payload_in[in_list_idx]))
+                                                 (self.size, len(payload_in[in_list_idx]))
                                 break
-                            else:
-                                pass  # still accumulating a message
                         else:
                             # socket closed
                             self.keep_running = False
-                            if not in_list_idx == self.count:
+                            if in_list_idx != self.count:
                                 self.error = "ERROR server closed. Echoed %d of %d messages." % (in_list_idx, self.count)
-                    if self.keep_running and mask & selectors.EVENT_WRITE:
-                        if out_ready_to_send:
-                            n_sent = self.sock.send(payload_out[out_list_idx][out_byte_idx:])
-                            total_sent += n_sent
-                            out_byte_idx += n_sent
-                            if out_byte_idx == self.size:
-                                self.logger.log("%s Sent message %d" % (self.prefix, out_list_idx))
-                                out_byte_idx = 0
-                                out_list_idx += 1
-                                sel.modify(self.sock, selectors.EVENT_READ)  # turn off write events
-                                out_ready_to_send = False  # turn on when rcvr receives
-                        else:
-                            pass  # logger.log("DEBUG: ignoring EVENT_WRITE")
-
+                    if (
+                        self.keep_running
+                        and mask & selectors.EVENT_WRITE
+                        and out_ready_to_send
+                    ):
+                        n_sent = self.sock.send(payload_out[out_list_idx][out_byte_idx:])
+                        total_sent += n_sent
+                        out_byte_idx += n_sent
+                        if out_byte_idx == self.size:
+                            self.logger.log("%s Sent message %d" % (self.prefix, out_list_idx))
+                            out_byte_idx = 0
+                            out_list_idx += 1
+                            sel.modify(self.sock, selectors.EVENT_READ)  # turn off write events
+                            out_ready_to_send = False  # turn on when rcvr receives
             # shut down
             sel.unregister(self.sock)
             self.sock.close()
@@ -215,7 +212,7 @@ class TcpEchoClient:
         self.is_running = False
 
     def wait(self, timeout=TIMEOUT):
-        self.logger.log("%s Client is shutting down" % self.prefix)
+        self.logger.log(f"{self.prefix} Client is shutting down")
         self.keep_running = False
         self._thread.join(timeout)
 
@@ -285,23 +282,23 @@ def main(argv):
         while keep_running:
             time.sleep(0.1)
             if client.error is not None:
-                logger.log("%s Client stopped with error: %s" % (prefix, client.error))
+                logger.log(f"{prefix} Client stopped with error: {client.error}")
                 keep_running = False
                 retval = 1
             if client.exit_status is not None:
-                logger.log("%s Client stopped with status: %s" % (prefix, client.exit_status))
+                logger.log(f"{prefix} Client stopped with status: {client.exit_status}")
                 keep_running = False
             if signaller.kill_now:
-                logger.log("%s Process killed with signal" % prefix)
+                logger.log(f"{prefix} Process killed with signal")
                 keep_running = False
             if keep_running and not client.is_running:
-                logger.log("%s Client stopped with no error or status" % prefix)
+                logger.log(f"{prefix} Client stopped with no error or status")
                 keep_running = False
 
     except Exception:
         client.error = "ERROR: exception : '%s'" % traceback.format_exc()
         if logger is not None:
-            logger.log("%s Exception: %s" % (prefix, traceback.format_exc()))
+            logger.log(f"{prefix} Exception: {traceback.format_exc()}")
         retval = 1
 
     if client.error is not None:

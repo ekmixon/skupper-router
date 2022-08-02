@@ -70,23 +70,43 @@ class SchemaWriter:
         self.writeln("'%s'%s::" % (
             attr.name, self.attribute_qualifiers(attr, show_create, show_update)))
         if attr.description:
-            self.writeln("  %s" % attr.description)
+            self.writeln(f"  {attr.description}")
         else:
-            self.warn("Warning: No description for %s in %s" % (attr, attr.defined_in.short_name))
+            self.warn(
+                f"Warning: No description for {attr} in {attr.defined_in.short_name}"
+            )
+
         self.writeln()
 
     def attribute_types(self, holder):
         holder_attributes = holder.my_attributes
         for attr in holder_attributes:
             if attr.deprecation_name:
-                deprecated_attr = AttributeType(attr.deprecation_name, type=attr.type, defined_in=attr.defined_in,
-                                                default=attr.default, required=attr.required, unique=attr.unique,
-                                                hidden=attr.hidden, deprecated=True, value=attr.value,
-                                                description="(DEPRECATED) " + attr.description
-                                                            + " This attribute has been deprecated. Use " +
-                                                            attr.name + " instead.",
-                                                create=attr.create, update=attr.update,
-                                                graph=attr.graph)
+                deprecated_attr = AttributeType(
+                    attr.deprecation_name,
+                    type=attr.type,
+                    defined_in=attr.defined_in,
+                    default=attr.default,
+                    required=attr.required,
+                    unique=attr.unique,
+                    hidden=attr.hidden,
+                    deprecated=True,
+                    value=attr.value,
+                    description=(
+                        (
+                            (
+                                f"(DEPRECATED) {attr.description}"
+                                + " This attribute has been deprecated. Use "
+                            )
+                            + attr.name
+                        )
+                        + " instead."
+                    ),
+                    create=attr.create,
+                    update=attr.update,
+                    graph=attr.graph,
+                )
+
                 holder_attributes.append(deprecated_attr)
 
         for attr in holder_attributes:
@@ -102,11 +122,11 @@ class SchemaWriter:
                         what.capitalize(), self.attribute_qualifiers(message.body),
                         message.body.description))
                 if message.properties:
-                    self.para(".%s properties" % (what.capitalize()))
+                    self.para(f".{what.capitalize()} properties")
                     for prop in message.properties.values():
                         self.attribute_type(prop)
 
-        with self.section("Operation %s" % op.name):
+        with self.section(f"Operation {op.name}"):
             if op.description:
                 self.para(op.description)
             request_response("request")
@@ -119,9 +139,9 @@ class SchemaWriter:
     def entity_type(self, entity_type, operation_defs=True):
         with self.section(entity_type.short_name):
             if entity_type.description:
-                self.para('%s' % entity_type.description)
+                self.para(f'{entity_type.description}')
             else:
-                self.warn("Warning no description for %s" % entity_type)
+                self.warn(f"Warning no description for {entity_type}")
             if entity_type.operations:
                 self.para("Operations allowed: `%s`\n\n" % "`, `".join(entity_type.operations))
 

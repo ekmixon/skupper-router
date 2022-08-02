@@ -88,7 +88,7 @@ from ..policy.policy_manager import PolicyManager
 
 def dictstr(d):
     """Stringify a dict in the form 'k=v, k=v ...' instead of '{k:v, ...}'"""
-    return ", ".join("%s=%s" % (k, v) for k, v in d.items())
+    return ", ".join(f"{k}={v}" for k, v in d.items())
 
 
 def required_property(prop, request):
@@ -172,9 +172,12 @@ class EntityAdapter(SchemaEntity):
         name = self.attributes.get("name")
         if identity:
             if not name:
-                self.attributes["name"] = "%s/%s" % (self.entity_type.short_name, self._identifier())
+                self.attributes["name"] = f"{self.entity_type.short_name}/{self._identifier()}"
         else:
-            self.attributes["identity"] = "%s/%s" % (self.entity_type.short_name, self._identifier())
+            self.attributes[
+                "identity"
+            ] = f"{self.entity_type.short_name}/{self._identifier()}"
+
             if not name:
                 self.attributes.setdefault('name', self.attributes['identity'])
 
@@ -239,7 +242,7 @@ class EntityAdapter(SchemaEntity):
     def __str__(self):
         keys = sorted(self.attributes.keys())
         # If the attribute is hidden the attribute value will show up as stars ('*******').
-        return "Entity(%s)" % ", ".join("%s=%s" % (k, '*******' if self.entity_type.attribute(k).hidden else self.attributes[k]) for k in keys)
+        return f"""Entity({", ".join(f"{k}={'*******' if self.entity_type.attribute(k).hidden else self.attributes[k]}" for k in keys)})"""
 
 
 class RouterEntity(EntityAdapter):
@@ -347,9 +350,10 @@ def _host_port_name_identifier(entity):
             attr, entity.entity_type.attribute(attr).missing_value())
 
     if entity.attributes.get('name'):
-        return "%s:%s:%s" % (entity.attributes['host'], entity.attributes['port'], entity.attributes['name'])
+        return f"{entity.attributes['host']}:{entity.attributes['port']}:{entity.attributes['name']}"
+
     else:
-        return "%s:%s" % (entity.attributes['host'], entity.attributes['port'])
+        return f"{entity.attributes['host']}:{entity.attributes['port']}"
 
 
 class SslProfileEntity(EntityAdapter):
@@ -384,8 +388,7 @@ class ConnectionBaseEntity(EntityAdapter):
 
     def validate(self, **kwargs):
         super(ConnectionBaseEntity, self).validate(**kwargs)
-        op = self.attributes.get('openProperties')
-        if op:
+        if op := self.attributes.get('openProperties'):
             # key check
             msg = "Reserved key '%s' not allowed in openProperties"
             try:
@@ -404,8 +407,7 @@ class ConnectionBaseEntity(EntityAdapter):
             # connections
             role = self.attributes.get('role', 'normal')
             if role in ['inter-router', 'edge']:
-                raise ValidationError("openProperties not allowed for role %s"
-                                      % role)
+                raise ValidationError(f"openProperties not allowed for role {role}")
 
 
 class ListenerEntity(ConnectionBaseEntity):
@@ -520,8 +522,7 @@ class HttpListenerEntity(EntityAdapter):
 
 class TcpListenerEntity(EntityAdapter):
     def create(self):
-        config_listener = self._qd.qd_dispatch_configure_tcp_listener(self._dispatch, self)
-        return config_listener
+        return self._qd.qd_dispatch_configure_tcp_listener(self._dispatch, self)
 
     def _identifier(self):
         return _host_port_name_identifier(self)
@@ -535,8 +536,7 @@ class TcpListenerEntity(EntityAdapter):
 
 class TcpConnectorEntity(EntityAdapter):
     def create(self):
-        config_connector = self._qd.qd_dispatch_configure_tcp_connector(self._dispatch, self)
-        return config_connector
+        return self._qd.qd_dispatch_configure_tcp_connector(self._dispatch, self)
 
     def _identifier(self):
         return _host_port_name_identifier(self)
@@ -588,18 +588,17 @@ class EntityCache:
             def function(x): return x
         if type is None:
             return list(map(function, self.entities))
-        else:
-            if not isinstance(type, EntityType):
-                type = self.schema.entity_type(type)
-            return list(map(function, filter(lambda e: e.entity_type.is_a(type),
-                                             self.entities)))
+        if not isinstance(type, EntityType):
+            type = self.schema.entity_type(type)
+        return list(map(function, filter(lambda e: e.entity_type.is_a(type),
+                                         self.entities)))
 
     def validate_add(self, entity):
         self.schema.validate_add(entity, self.entities)
 
     def add(self, entity):
         """Add an entity to the agent"""
-        self.log(LOG_DEBUG, "Add entity: %s" % entity)
+        self.log(LOG_DEBUG, f"Add entity: {entity}")
         entity.validate()       # Fill in defaults etc.
         # Validate in the context of the existing entities for uniqueness
         self.validate_add(entity)
@@ -621,8 +620,11 @@ class EntityCache:
     def _remove(self, entity):
         try:
             self.entities.remove(entity)
-            self.log(LOG_DEBUG, "Remove %s entity: %s" %
-                     (entity.entity_type.short_name, entity.attributes['identity']))
+            self.log(
+                LOG_DEBUG,
+                f"Remove {entity.entity_type.short_name} entity: {entity.attributes['identity']}",
+            )
+
         except ValueError:
             pass
 
@@ -685,8 +687,7 @@ class ManagementEntity(EntityAdapter):
         self.__dict__["_schema"] = entity_type.schema
 
     def requested_type(self, request):
-        type = request.properties.get('entityType')
-        if type:
+        if type := request.properties.get('entityType'):
             return self._schema.entity_type(type)
         else:
             return None
@@ -703,11 +704,8 @@ class ManagementEntity(EntityAdapter):
         if names:
             unknown = set(names) - set(all_attrs)
             if unknown:
-                if entity_type:
-                    for_type = " for type %s" % entity_type.name
-                else:
-                    for_type = ""
-                raise NotFoundStatus("Unknown attributes %s%s." % (list(unknown), for_type))
+                for_type = f" for type {entity_type.name}" if entity_type else ""
+                raise NotFoundStatus(f"Unknown attributes {list(unknown)}{for_type}.")
         else:
             names = all_attrs
 
@@ -728,8 +726,10 @@ class ManagementEntity(EntityAdapter):
 
     def get_types(self, request):
         type = self.requested_type(request)
-        return (OK, dict((t.name, [b.name for b in t.all_bases])
-                         for t in self._schema.by_type(type)))
+        return OK, {
+            t.name: [b.name for b in t.all_bases]
+            for t in self._schema.by_type(type)
+        }
 
     def get_annotations(self, request):
         """
@@ -739,15 +739,19 @@ class ManagementEntity(EntityAdapter):
 
     def get_operations(self, request):
         type = self.requested_type(request)
-        return (OK, dict((t, et.operations)
-                         for t, et in self._schema.entity_types.items()
-                         if not type or type.name == t))
+        return OK, {
+            t: et.operations
+            for t, et in self._schema.entity_types.items()
+            if not type or type.name == t
+        }
 
     def get_attributes(self, request):
         type = self.requested_type(request)
-        return (OK, dict((t, list(et.attributes))
-                         for t, et in self._schema.entity_types.items()
-                         if not type or type.name == t))
+        return OK, {
+            t: list(et.attributes)
+            for t, et in self._schema.entity_types.items()
+            if not type or type.name == t
+        }
 
     def get_mgmt_nodes(self, request):
         router = self._agent.entities.map_type(None, 'router')[0]
@@ -802,7 +806,7 @@ class ManagementEntity(EntityAdapter):
                 return (OK, out.getvalue())
             finally:
                 out.close()
-        raise BadRequestStatus("Bad profile request %s" % (request))
+        raise BadRequestStatus(f"Bad profile request {request}")
 
 
 class Agent:
@@ -826,17 +830,17 @@ class Agent:
     def activate(self, address: str) -> None:
         """Register the management address to receive management requests"""
         self.entities.refresh_from_c()
-        self.log(LOG_INFO, "Activating management agent on %s" % address)
+        self.log(LOG_INFO, f"Activating management agent on {address}")
         self.io = IoAdapter(self.receive, address, 'L', TREATMENT_ANYCAST_CLOSEST)
 
     def entity_class(self, entity_type):
         """Return the class that implements entity_type"""
-        class_name = camelcase(entity_type.short_name, capital=True) + 'Entity'
-        entity_class = globals().get(class_name)
-        if not entity_class:
+        class_name = f'{camelcase(entity_type.short_name, capital=True)}Entity'
+        if entity_class := globals().get(class_name):
+            return entity_class
+        else:
             raise InternalServerErrorStatus(
                 "Can't find implementation '%s' for '%s'" % (class_name, entity_type.name))
-        return entity_class
 
     def create_entity(self, attributes):
         """Create an instance of the implementation class for an entity"""
@@ -868,7 +872,11 @@ class Agent:
         """Called when a management request is received."""
         def error(e, trace):
             """Raise an error"""
-            self.log(LOG_ERROR, "Error performing %s: %s" % (request.properties.get('operation'), e.description))
+            self.log(
+                LOG_ERROR,
+                f"Error performing {request.properties.get('operation')}: {e.description}",
+            )
+
             self.respond(request, e.status, e.description)
 
         # If there's no reply_to, don't bother to process the request.
@@ -879,7 +887,7 @@ class Agent:
         with self.request_lock:
             try:
                 self.entities.refresh_from_c()
-                self.log(LOG_DEBUG, "Agent request %s" % request)
+                self.log(LOG_DEBUG, f"Agent request {request}")
                 status, body = self.handle(request)
                 self.respond(request, status=status, body=body)
             except ManagementError as e:
@@ -887,7 +895,7 @@ class Agent:
             except ValidationError as e:
                 error(BadRequestStatus(str(e)), format_exc())
             except Exception as e:
-                error(InternalServerErrorStatus("%s: %s" % (type(e).__name__, e)), format_exc())
+                error(InternalServerErrorStatus(f"{type(e).__name__}: {e}"), format_exc())
 
     def entity_type(self, type):
         try:
@@ -906,14 +914,13 @@ class Agent:
             # Create requests are entity requests but must be handled by the agent since
             # the entity does not yet exist.
             return self.create(request)
-        else:
-            target = self.find_entity(request)
-            target.entity_type.allowed(operation, request.body)
-            try:
-                method = getattr(target, operation.lower().replace("-", "_"))
-            except AttributeError:
-                not_implemented(operation, target.type)
-            return method(request)
+        target = self.find_entity(request)
+        target.entity_type.allowed(operation, request.body)
+        try:
+            method = getattr(target, operation.lower().replace("-", "_"))
+        except AttributeError:
+            not_implemented(operation, target.type)
+        return method(request)
 
     def _create(self, attributes):
         """Create an entity, called externally or from configuration file."""
@@ -924,13 +931,7 @@ class Agent:
         # trouble of calling entity.create()
         self.entities.validate_add(entity)
 
-        # DISPATCH-1622 - The following entity.create() is going to call the create method
-        # of the actual entity implementation like a ConnectorEntity or a
-        # ListenerEntity and so on which in turn ends up calling the c code.
-        # The previous line calls validate_add BEFORE
-        # entity.create() is called thus preventing the C code from being called.
-        pointer = entity.create()
-        if pointer:
+        if pointer := entity.create():
             cimplementation = CImplementation(self.qd, entity.entity_type, pointer)
             self.entities.add_implementation(cimplementation, entity)
         else:
@@ -986,8 +987,12 @@ class Agent:
         if requested_type:
             requested_type = self.schema.entity_type(requested_type)
         # ids is a map of identifying attribute values
-        ids = dict((k, request.properties.get(k))
-                   for k in ['name', 'identity'] if k in request.properties)
+        ids = {
+            k: request.properties.get(k)
+            for k in ['name', 'identity']
+            if k in request.properties
+        }
+
 
         # Special case for management object: if no name/id and no conflicting type
         # then assume this is for "self"
@@ -995,11 +1000,11 @@ class Agent:
             if not requested_type or self.management.entity_type.is_a(requested_type):
                 return self.management
             else:
-                raise BadRequestStatus("%s: No name or identity provided" % requested_type)
+                raise BadRequestStatus(f"{requested_type}: No name or identity provided")
 
         def attrvals():
             """String form of the id attribute values for error messages"""
-            return " ".join(["%s=%s" % (k, v) for k, v in ids.items()])
+            return " ".join([f"{k}={v}" for k, v in ids.items()])
 
         k, v = next(iter(ids.items()))  # Get the first id attribute
         found = self.entities.map_filter(None, lambda e: e.attributes.get(k) == v)
@@ -1007,18 +1012,19 @@ class Agent:
             entity = found[0]
         elif len(found) > 1:
             raise InternalServerErrorStatus(
-                "Duplicate (%s) entities with %s=%s" % (len(found), k, v))
+                f"Duplicate ({len(found)}) entities with {k}={v}"
+            )
+
         else:
-            raise NotFoundStatus("No entity with %s" % attrvals())
+            raise NotFoundStatus(f"No entity with {attrvals()}")
 
         for k, v in ids.items():
             if entity[k] != v:
-                raise BadRequestStatus("Conflicting %s" % attrvals())
+                raise BadRequestStatus(f"Conflicting {attrvals()}")
 
-        if requested_type:
-            if not entity.entity_type.is_a(requested_type):
-                raise BadRequestStatus("Entity type '%s' does not extend requested type '%s'" %
-                                       (entity.entity_type.name, requested_type))
+        if requested_type and not entity.entity_type.is_a(requested_type):
+            raise BadRequestStatus("Entity type '%s' does not extend requested type '%s'" %
+                                   (entity.entity_type.name, requested_type))
 
         return entity
 

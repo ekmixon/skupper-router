@@ -85,24 +85,17 @@ class ConnectorStatusTest(TestCase):
         return out
 
     def can_terminate(self):
-        if self.attempts == self.max_attempts:
-            return True
-
-        if self.success:
-            return True
-
-        return False
+        return True if self.attempts == self.max_attempts else bool(self.success)
 
     def schedule_B_connector_test(self):
-        if self.attempts < self.max_attempts:
-            if not self.success:
-                Timer(self.timer_delay, self.check_B_connector).start()
-                self.attempts += 1
+        if self.attempts < self.max_attempts and not self.success:
+            Timer(self.timer_delay, self.check_B_connector).start()
+            self.attempts += 1
 
     def check_B_connector(self):
         # Router A should now try to connect to Router B again since we killed Router C.
         long_type = 'io.skupper.router.connector'
-        query_command = 'QUERY --type=' + long_type
+        query_command = f'QUERY --type={long_type}'
         output = json.loads(self.run_skmanage(query_command, address=self.address()))
 
         conn_status = output[0].get('connectionStatus')
@@ -118,13 +111,11 @@ class ConnectorStatusTest(TestCase):
         # Verify that the connectionStatus field of the connector is set to SUCCESS.
         # Also make sure that the connectionMsg field of the connector has "Connection opened" in it.
         long_type = 'io.skupper.router.connector'
-        query_command = 'QUERY --type=' + long_type
+        query_command = f'QUERY --type={long_type}'
         output = json.loads(self.run_skmanage(query_command))
         connection_msg = output[0]['connectionMsg']
         self.assertEqual('SUCCESS', output[0]['connectionStatus'])
-        conn_opened = False
-        if "Connection Opened: dir=out" in connection_msg:
-            conn_opened = True
+        conn_opened = "Connection Opened: dir=out" in connection_msg
         self.assertEqual(True, conn_opened)
 
         # Now tear down Router QDR.A. On doing this, router QDR.B will lose connectivity to

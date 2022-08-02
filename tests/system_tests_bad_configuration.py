@@ -115,7 +115,7 @@ class RouterTestBadConfiguration(TestCase):
             # mode 'r' and 't' are defaults
             with open(self.router.logfile_path) as router_log:
                 log_lines = router_log.read().split("\n")
-                expected_log_snip = "Connection to %s" % self.unresolvable_host_name
+                expected_log_snip = f"Connection to {self.unresolvable_host_name}"
                 errors_caught = [line for line in log_lines if expected_log_snip in line and "failed" in line]
 
                 self.error_caught = any(errors_caught)

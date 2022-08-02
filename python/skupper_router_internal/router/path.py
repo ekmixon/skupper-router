@@ -95,15 +95,11 @@ class PathEngine:
         # for which the path from origin to dest passes through us.  This is the set
         # of valid origins for forwarding to the destination.
         ##
-        valid_origin = {}         # Map of destination => List of Valid Origins
-        for node in nodeset:
-            if node != self.id:
-                valid_origin[node] = []
-
-        for root in valid_origin.keys():
+        valid_origin = {node: [] for node in nodeset if node != self.id}
+        for root in valid_origin:
             prev, cost, hops = self._calculate_tree_from_root(root, collection)
             nodes = list(prev.keys())
-            while len(nodes) > 0:
+            while nodes:
                 u = nodes[0]
                 path = [u]
                 nodes.remove(u)
@@ -137,7 +133,7 @@ class PathEngine:
         # Distill the path tree into a map of next hops for each node
         ##
         next_hops = {}
-        while len(nodes) > 0:
+        while nodes:
             u = nodes[0]          # pick any destination
             path = [u]
             nodes.remove(u)
@@ -188,10 +184,7 @@ class NodeSet:
         return len(self.nodes) == 0
 
     def contains(self, _id):
-        for a, b in self.nodes:
-            if a == _id:
-                return True
-        return False
+        return any(a == _id for a, b in self.nodes)
 
     def lowest_cost(self):
         """

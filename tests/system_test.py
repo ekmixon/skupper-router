@@ -106,10 +106,10 @@ def _check_requirements():
     """If requirements are missing, return a message, else return empty string."""
     missing = MISSING_MODULES
     required_exes = ['skrouterd']
-    missing += ["No exectuable %s" % e for e in required_exes if not find_exe(e)]
+    missing += [f"No exectuable {e}" for e in required_exes if not find_exe(e)]
 
     if missing:
-        return "%s: %s" % (__name__, ", ".join(missing))
+        return f'{__name__}: {", ".join(missing)}'
 
 
 MISSING_REQUIREMENTS = _check_requirements()
@@ -137,13 +137,11 @@ def retry(function: Callable[[], bool], timeout: float = TIMEOUT, delay: float =
     """
     deadline = time.time() + timeout
     while True:
-        ret = function()
-        if ret:
+        if ret := function():
             return ret
-        else:
-            delay = retry_delay(deadline, delay, max_delay)
-            if delay is None:
-                return None
+        delay = retry_delay(deadline, delay, max_delay)
+        if delay is None:
+            return None
 
 
 _T = TypeVar('_T')
@@ -251,7 +249,7 @@ def wait_port(port, socket_address_family='IPv4', **retry_kwargs):
     Takes same keyword arguments as retry to control the timeout"""
     def check(e):
         """Only retry on connection refused"""
-        assert isinstance(e, socket.error) or not e.errno == errno.ECONNREFUSED
+        assert isinstance(e, socket.error) or e.errno != errno.ECONNREFUSED
 
     host = None
 
@@ -267,7 +265,7 @@ def wait_port(port, socket_address_family='IPv4', **retry_kwargs):
     try:
         retry_exception(connect, exception_test=check, **retry_kwargs)
     except Exception as e:
-        raise Exception("wait_port timeout on host %s port %s: %s" % (host, port, e))
+        raise Exception(f"wait_port timeout on host {host} port {port}: {e}")
 
 
 def wait_ports(ports, **retry_kwargs):
@@ -288,10 +286,13 @@ def message(**properties):
 
 def skip_test_in_ci(environment_var):
     env_var = os.environ.get(environment_var)
-    if env_var is not None:
-        if env_var.lower() in ['true', '1', 't', 'y', 'yes']:
-            return True
-    return False
+    return env_var is not None and env_var.lower() in [
+        'true',
+        '1',
+        't',
+        'y',
+        'yes',
+    ]
 
 
 class Process(subprocess.Popen):
@@ -309,7 +310,7 @@ class Process(subprocess.Popen):
     @classmethod
     def unique(cls, name):
         cls.unique_id += 1
-        return "%s-%s" % (name, cls.unique_id)
+        return f"{name}-{cls.unique_id}"
 
     def __init__(self, args, name=None, expect=EXIT_OK, **kwargs):
         """
@@ -324,29 +325,35 @@ class Process(subprocess.Popen):
         """
         self.name = name or os.path.basename(args[0])
         self.args = args
-        assert expect is not None, "Process (name=%s) argument expect cannot be None" % self.name
+        assert (
+            expect is not None
+        ), f"Process (name={self.name}) argument expect cannot be None"
+
         self.expect = expect
         self.actual = None
         self.outdir = os.getcwd()
         self.outfile = os.path.abspath(self.unique(self.name))
         self.torndown = False
-        self._logger = Logger(title="Process logger for name=%s" % self.name,
-                              print_to_console=True)
+        self._logger = Logger(
+            title=f"Process logger for name={self.name}", print_to_console=True
+        )
+
         kwargs.setdefault('stdin', subprocess.PIPE)
-        with open(self.outfile + '.out', 'w') as out:
+        with open(f'{self.outfile}.out', 'w') as out:
             kwargs.setdefault('stdout', out)
             kwargs.setdefault('stderr', subprocess.STDOUT)
             try:
                 super(Process, self).__init__(args, **kwargs)
-                with open(self.outfile + '.cmd', 'w') as f:
+                with open(f'{self.outfile}.cmd', 'w') as f:
                     f.write("%s\npid=%s\n" % (' '.join(args), self.pid))
             except Exception as e:
-                raise Exception("subprocess.Popen(%s, %s) failed: %s: %s" %
-                                (args, kwargs, type(e).__name__, e))
+                raise Exception(
+                    f"subprocess.Popen({args}, {kwargs}) failed: {type(e).__name__}: {e}"
+                )
 
     def assert_running(self):
         """Assert that the process is still running"""
-        assert self.poll() is None, "%s: exited" % ' '.join(self.args)
+        assert self.poll() is None, f"{' '.join(self.args)}: exited"
 
     def teardown(self):
         """Check process status and stop the process if necessary"""
@@ -355,10 +362,21 @@ class Process(subprocess.Popen):
         self.torndown = True
 
         def error(msg):
-            with open(self.outfile + '.out') as f:
-                raise RuntimeError("Process %s (name=%s) error: %s\n%s\n%s\n>>>>\n%s<<<<" % (
-                    self.pid, self.name, msg, ' '.join(self.args),
-                    self.outfile + '.cmd', f.read()))
+            with open(f'{self.outfile}.out') as f:
+                raise RuntimeError(
+                    (
+                        "Process %s (name=%s) error: %s\n%s\n%s\n>>>>\n%s<<<<"
+                        % (
+                            self.pid,
+                            self.name,
+                            msg,
+                            ' '.join(self.args),
+                            f'{self.outfile}.cmd',
+                            f.read(),
+                        )
+                    )
+                )
+
 
         # If the process is already dead, this might mean that the process has crashed (For example: a router
         # crash). self.poll() will return a non None value if the process is already gone.
@@ -392,7 +410,7 @@ class Process(subprocess.Popen):
                 self.kill()
                 try:
                     self.wait(timeout=TIMEOUT)
-                    self._logger.log("Process %s killed successfully" % self.pid)
+                    self._logger.log(f"Process {self.pid} killed successfully")
                 except TimeoutExpired:
                     # There is something seriously wrong if kill() did not kill the process.
                     # But should the test suite fail because of this ? Right now, it will
@@ -404,7 +422,7 @@ class Process(subprocess.Popen):
 
         # At this time, we want to check if self.expect and self.actual are the same
         if self.expect != self.actual:
-            error("exit code is %s, expected %s" % (self.actual, self.expect))
+            error(f"exit code is {self.actual}, expected {self.expect}")
 
 
 class Config:
@@ -510,20 +528,21 @@ class Qdrouterd(Process):
         def __str__(self):
             """Generate config file content. Calls default() first."""
             def tabs(level):
-                if level:
-                    return "    " * level
-                return ""
+                return "    " * level if level else ""
 
             def value(item, level):
                 if isinstance(item, dict):
-                    result = "{\n"
-                    result += "".join(["%s%s: %s,\n" % (tabs(level + 1),
-                                                        json.dumps(k),
-                                                        json.dumps(v))
-                                       for k, v in item.items()])
+                    result = "{\n" + "".join(
+                        [
+                            "%s%s: %s,\n"
+                            % (tabs(level + 1), json.dumps(k), json.dumps(v))
+                            for k, v in item.items()
+                        ]
+                    )
+
                     result += "%s}" % tabs(level)
                     return result
-                return "%s" %  item
+                return f"{item}"
 
             def attributes(e, level):
                 assert isinstance(e, dict)
@@ -552,16 +571,17 @@ class Qdrouterd(Process):
             name = self.config.router_id
         assert name
         # setup log and debug dump files
-        self.dumpfile = os.path.abspath('%s-qddebug.txt' % name)
+        self.dumpfile = os.path.abspath(f'{name}-qddebug.txt')
         self.config.sections('router')[0]['debugDumpFile'] = self.dumpfile
-        default_log = [l for l in config if (l[0] == 'log' and l[1]['module'] == 'DEFAULT')]
-        if not default_log:
-            self.logfile = "%s.log" % name
+        if default_log := [
+            l for l in config if (l[0] == 'log' and l[1]['module'] == 'DEFAULT')
+        ]:
+            self.logfile = default_log[0][1].get('outputFile')
+        else:
+            self.logfile = f"{name}.log"
             config.append(
                 ('log', {'module': 'DEFAULT', 'enable': 'trace+',
                          'includeSource': 'true', 'outputFile': self.logfile}))
-        else:
-            self.logfile = default_log[0][1].get('outputFile')
         args = ['skrouterd', '-c', config.write(name)] + cl_args
         env_home = os.environ.get('QPID_DISPATCH_HOME')
         if pyinclude:
@@ -619,7 +639,7 @@ class Qdrouterd(Process):
                 # TestCase setUpClass method) that gets cleaned up by the test.
                 pass
 
-        check_output_file(filename=self.outfile + '.out', description="output file")
+        check_output_file(filename=f'{self.outfile}.out', description="output file")
         check_output_file(filename=self.dumpfile, description="debug dump file")
 
         if teardown_exc:
@@ -639,8 +659,7 @@ class Qdrouterd(Process):
                 return out
 
             try:
-                for fname in [("output", self.outfile + '.out'),
-                              ("command", self.outfile + '.cmd')]:
+                for fname in [("output", f'{self.outfile}.out'), ("command", f'{self.outfile}.cmd')]:
                     with open(fname[1]) as f:
                         sys.stderr.write("\nRouter %s %s file:\n>>>>\n" %
                                          (self.config.router_id, fname[0]))
@@ -652,7 +671,7 @@ class Qdrouterd(Process):
                                      self.config.router_id)
                     tail = tail_file(os.path.join(self.outdir, self.logfile))
                     for ln in tail:
-                        sys.stderr.write("%s" % ln)
+                        sys.stderr.write(f"{ln}")
                     sys.stderr.write("\n<<<<\n")
                 sys.stderr.flush()
             except OSError:
@@ -668,14 +687,12 @@ class Qdrouterd(Process):
         Example -
         { 23456: 'IPv4', 243455: 'IPv6' }
         """
-        ports_fam = {}
-        for l in self.config.sections('listener'):
-            if l.get('socketAddressFamily'):
-                ports_fam[l['port']] = l['socketAddressFamily']
-            else:
-                ports_fam[l['port']] = 'IPv4'
-
-        return ports_fam
+        return {
+            l['port']: l['socketAddressFamily']
+            if l.get('socketAddressFamily')
+            else 'IPv4'
+            for l in self.config.sections('listener')
+        }
 
     @property
     def ports(self):
@@ -686,11 +703,11 @@ class Qdrouterd(Process):
         host = c['host']
         port = c['port']
         socket_address_family = c.get('socketAddressFamily', 'IPv4')
-        if socket_address_family == 'IPv6':
-            return "[%s]:%s" % (host, port)
-        elif socket_address_family == 'IPv4':
-            return "%s:%s" % (host, port)
-        raise Exception("Unknown socket address family: %s" % socket_address_family)
+        if socket_address_family == 'IPv4':
+            return f"{host}:{port}"
+        elif socket_address_family == 'IPv6':
+            return f"[{host}]:{port}"
+        raise Exception(f"Unknown socket address family: {socket_address_family}")
 
     @property
     def http_addresses(self):
@@ -700,22 +717,22 @@ class Qdrouterd(Process):
         for listener in cfg:
             require_tls = listener.get("sslProfile")
             if require_tls is not None:
-                ret_val.append("https://%s" % self._cfg_2_host_port(listener))
+                ret_val.append(f"https://{self._cfg_2_host_port(listener)}")
             else:
-                ret_val.append("http://%s" % self._cfg_2_host_port(listener))
+                ret_val.append(f"http://{self._cfg_2_host_port(listener)}")
         return ret_val
 
     @property
     def addresses(self):
         """Return amqp://host:port addresses for all listeners"""
         cfg = self.config.sections('listener')
-        return ["amqp://%s" % self._cfg_2_host_port(l) for l in cfg]
+        return [f"amqp://{self._cfg_2_host_port(l)}" for l in cfg]
 
     @property
     def connector_addresses(self):
         """Return list of amqp://host:port for all connectors"""
         cfg = self.config.sections('connector')
-        return ["amqp://%s" % self._cfg_2_host_port(c) for c in cfg]
+        return [f"amqp://{self._cfg_2_host_port(c)}" for c in cfg]
 
     @property
     def hostports(self):
@@ -730,7 +747,7 @@ class Qdrouterd(Process):
             response = self.management.query(type="io.skupper.router.connection")
             index_host = response.attribute_names.index('host')
             for result in response.results:
-                outs = '%s:%s' % (host, port)
+                outs = f'{host}:{port}'
                 if result[index_host] == outs:
                     ret_val = True
                     break
@@ -779,12 +796,7 @@ class Qdrouterd(Process):
         assert retry(check, **retry_kwargs)
 
     def get_host(self, socket_address_family):
-        if socket_address_family == 'IPv4':
-            return '127.0.0.1'
-        elif socket_address_family == 'IPv6':
-            return '::1'
-        else:
-            return '127.0.0.1'
+        return '::1' if socket_address_family == 'IPv6' else '127.0.0.1'
 
     def wait_ports(self, **retry_kwargs):
         wait_ports(self.ports_family, **retry_kwargs)
@@ -795,8 +807,14 @@ class Qdrouterd(Process):
         @param retry_kwargs: keyword args for L{retry}
         """
         for c in self.config.sections('connector'):
-            assert retry(lambda c=c: self.is_connected(port=c['port'], host=c.get('host') if c.get('host') else self.get_host(c.get('socketAddressFamily'))),
-                         **retry_kwargs), "Port not connected %s" % c['port']
+            assert retry(
+                lambda c=c: self.is_connected(
+                    port=c['port'],
+                    host=c.get('host')
+                    or self.get_host(c.get('socketAddressFamily')),
+                ),
+                **retry_kwargs,
+            ), f"Port not connected {c['port']}"
 
     def wait_startup_message(self, **retry_kwargs):
         """Wait for router startup message to be printed into logfile
@@ -837,7 +855,7 @@ class Qdrouterd(Process):
     def is_router_connected(self, router_id, **retry_kwargs):
         node = None
         try:
-            self.management.read(identity="router.node/%s" % router_id)
+            self.management.read(identity=f"router.node/{router_id}")
             node = Node.connect(self.addresses[0], router_id, timeout=1)
             return retry_exception(lambda: node.query('io.skupper.router.router'))
         except (proton.ConnectionException, NotFoundStatus, proton.utils.LinkDetached):
@@ -870,7 +888,7 @@ class Qdrouterd(Process):
                     dir_index = out.attribute_names.index("dir")
                     edges_num = 0
                     for conn in out.results:
-                        if "edge" == conn[role_index] and conn[dir_index] == "in":
+                        if conn[role_index] == "edge" and conn[dir_index] == "in":
                             edges_num += 1
                         if edges_num == edges:
                             return True
@@ -899,14 +917,14 @@ class Qdrouterd(Process):
                     protocol_index = out.attribute_names.index("protocol")
 
                     for conn in out.results:
-                        if "inter-router" != conn[role_index] and \
-                                conn[dir_index] == "out" and \
-                                "http" in conn[protocol_index]:
+                        if (
+                            conn[role_index] != "inter-router"
+                            and conn[dir_index] == "out"
+                            and "http" in conn[protocol_index]
+                        ):
                             if check_tls:
                                 ssl_proto_index = out.attribute_names.index("sslProto")
-                                if conn[ssl_proto_index] and "TLS" in conn[ssl_proto_index]:
-                                    return True
-                                return False
+                                return bool(conn[ssl_proto_index] and "TLS" in conn[ssl_proto_index])
                             return True
                 return False
             except (proton.ConnectionException, NotFoundStatus, proton.utils.LinkDetached):
@@ -1009,8 +1027,7 @@ class Tester:
         for obj in self.cleanup_list:
             try:
                 for method in ["teardown", "tearDown", "stop", "close"]:
-                    cleanup = getattr(obj, method, None)
-                    if cleanup:
+                    if cleanup := getattr(obj, method, None):
                         cleanup()
                         break
             except Exception as exc:
@@ -1081,7 +1098,7 @@ class TestCase(unittest.TestCase, Tester):  # pylint: disable=too-many-public-me
     def assert_fair(self, seq):
         avg = sum(seq) / len(seq)
         for i in seq:
-            assert i > avg / 2, "Work not fairly distributed: %s" % seq
+            assert i > avg / 2, f"Work not fairly distributed: {seq}"
 
     if not hasattr(unittest.TestCase, 'assertRegex'):
         def assertRegex(self, text, expected_regex, msg=None):
@@ -1142,14 +1159,17 @@ class AsyncTestReceiver(MessagingHandler):
         self.queue = AsyncTestReceiver.MyQueue(self)
         self._conn = None
         self._container = Container(self)
-        cid = container_id or "ATR-%s:%s" % (source, uuid.uuid4())
+        cid = container_id or f"ATR-{source}:{uuid.uuid4()}"
         self._container.container_id = cid
         self._ready = Event()
         self._recover_link = recover_link
         self._recover_count = 0
         self._stop_thread = False
         self._thread = Thread(target=self._main)
-        self._logger = Logger(title="AsyncTestReceiver %s" % cid, print_to_console=print_to_console)
+        self._logger = Logger(
+            title=f"AsyncTestReceiver {cid}", print_to_console=print_to_console
+        )
+
         self._thread.daemon = True
         self._thread.start()
         self.num_queue_puts = 0
@@ -1166,17 +1186,20 @@ class AsyncTestReceiver(MessagingHandler):
         self._container.start()
         self._logger.log("AsyncTestReceiver Starting reactor")
         while self._container.process():
-            if self._stop_thread:
-                if self._conn:
-                    self._conn.close()
-                    self._conn = None
+            if self._stop_thread and self._conn:
+                self._conn.close()
+                self._conn = None
         self._logger.log("AsyncTestReceiver reactor thread done")
 
     def on_connection_error(self, event):
-        self._logger.log("AsyncTestReceiver on_connection_error=%s" % event.connection.remote_condition.description)
+        self._logger.log(
+            f"AsyncTestReceiver on_connection_error={event.connection.remote_condition.description}"
+        )
 
     def on_link_error(self, event):
-        self._logger.log("AsyncTestReceiver on_link_error=%s" % event.link.remote_condition.description)
+        self._logger.log(
+            f"AsyncTestReceiver on_link_error={event.link.remote_condition.description}"
+        )
 
     def stop(self, timeout=TIMEOUT):
         self._stop_thread = True
@@ -1191,7 +1214,7 @@ class AsyncTestReceiver(MessagingHandler):
     def on_start(self, event):
         kwargs = {'url': self.address}
         if self.conn_args:
-            kwargs.update(self.conn_args)
+            kwargs |= self.conn_args
         self._conn = event.container.connect(**kwargs)
 
     def on_connection_opened(self, event):
@@ -1210,8 +1233,11 @@ class AsyncTestReceiver(MessagingHandler):
             # lesson learned: the generated link name will be the same as the
             # old link (which is bad) so we specify a new one
             self._recover_count += 1
-            kwargs = {'source': self.source,
-                      'name': "%s:%s" % (event.link.name, self._recover_count)}
+            kwargs = {
+                'source': self.source,
+                'name': f"{event.link.name}:{self._recover_count}",
+            }
+
             rcv = event.container.create_receiver(event.connection,
                                                   **kwargs)
 
@@ -1258,12 +1284,15 @@ class AsyncTestSender(MessagingHandler):
         self._sender = None
         self._message = message or Message(body="test")
         self._container = Container(self)
-        cid = container_id or "ATS-%s:%s" % (target, uuid.uuid4())
+        cid = container_id or f"ATS-{target}:{uuid.uuid4()}"
         self._container.container_id = cid
-        self._link_name = "%s-%s" % (cid, "tx")
+        self._link_name = f"{cid}-tx"
         self._thread = Thread(target=self._main)
         self._thread.daemon = True
-        self._logger = Logger(title="AsyncTestSender %s" % cid, print_to_console=print_to_console)
+        self._logger = Logger(
+            title=f"AsyncTestSender {cid}", print_to_console=print_to_console
+        )
+
         self._thread.start()
         self.msg_stats = "self.sent=%d, self.accepted=%d, self.released=%d, self.modified=%d, self.rejected=%d"
 
@@ -1345,7 +1374,7 @@ class AsyncTestSender(MessagingHandler):
         self._logger.log("message %d rejected" % self.rejected)
 
     def on_link_error(self, event):
-        self.error = "link error:%s" % str(event.link.remote_condition)
+        self.error = f"link error:{str(event.link.remote_condition)}"
         self._logger.log(self.error)
         if self._conn:
             self._conn.close()
@@ -1381,9 +1410,9 @@ class QdManager:
         self.edge_router_id = edge_router_id
         self.router: List[str] = []
         if self.router_id:
-            self.router = self.router + ['--router', self.router_id]
+            self.router += ['--router', self.router_id]
         elif self.edge_router_id:
-            self.router = self.router + ['--edge-router', self.edge_router_id]
+            self.router += ['--edge-router', self.edge_router_id]
 
     def __call__(self, cmd: str,
                  address: Optional[str] = None,
@@ -1402,38 +1431,38 @@ class QdManager:
             return rc[0]
 
     def create(self, long_type, kwargs):
-        cmd = "CREATE --type=%s" % long_type
+        cmd = f"CREATE --type={long_type}"
         for k, v in kwargs.items():
-            cmd += " %s=%s" % (k, v)
+            cmd += f" {k}={v}"
         return json.loads(self(cmd))
 
     def update(self, long_type, kwargs, name=None, identity=None):
-        cmd = 'UPDATE --type=%s' % long_type
+        cmd = f'UPDATE --type={long_type}'
         if identity is not None:
-            cmd += " --identity=%s" % identity
+            cmd += f" --identity={identity}"
         elif name is not None:
-            cmd += " --name=%s" % name
+            cmd += f" --name={name}"
         for k, v in kwargs.items():
-            cmd += " %s=%s" % (k, v)
+            cmd += f" {k}={v}"
         return json.loads(self(cmd))
 
     def delete(self, long_type, name=None, identity=None):
-        cmd = 'DELETE --type=%s' %  long_type
+        cmd = f'DELETE --type={long_type}'
         if identity is not None:
-            cmd += " --identity=%s" % identity
+            cmd += f" --identity={identity}"
         elif name is not None:
-            cmd += " --name=%s" % name
+            cmd += f" --name={name}"
         else:
             assert False, "name or identity not supplied!"
         self(cmd)
 
     def query(self, long_type):
-        return json.loads(self('QUERY --type=%s' % long_type))
+        return json.loads(self(f'QUERY --type={long_type}'))
 
     def get_log(self, limit=None):
         cmd = 'GET-LOG'
         if limit:
-            cmd += " limit=%s" % limit
+            cmd += f" limit={limit}"
         return json.loads(self(cmd))
 
 
@@ -1449,9 +1478,7 @@ class MgmtMsgProxy:
                 results = []
                 names   = body['attributeNames']
                 for result in body['results']:
-                    result_map = {}
-                    for i in range(len(names)):
-                        result_map[names[i]] = result[i]
+                    result_map = {names[i]: result[i] for i in range(len(names))}
                     results.append(MgmtMsgProxy._Response(status_code, status_description, result_map))
                 self.attrs = {'results': results}
             else:
@@ -1531,21 +1558,13 @@ def get_link_info(name, address):
     """
     qdm = QdManager(address=address)
     rc = qdm.query('io.skupper.router.router.link')
-    for item in rc:
-        if item.get('name') == name:
-            return item
-    return None
+    return next((item for item in rc if item.get('name') == name), None)
 
 
 def has_mobile_dest_in_address_table(address, dest):
     qdm = QdManager(address=address)
     rc = qdm.query('io.skupper.router.router.address')
-    has_dest = False
-    for item in rc:
-        if dest in item.get("name"):
-            has_dest = True
-            break
-    return has_dest
+    return any(dest in item.get("name") for item in rc)
 
 
 def get_inter_router_links(address):
@@ -1553,14 +1572,9 @@ def get_inter_router_links(address):
     Return a list of all links with type="inter-router
     :param address:
     """
-    inter_router_links = []
     qdm = QdManager(address=address)
     rc = qdm.query('io.skupper.router.router.link')
-    for item in rc:
-        if item.get("linkType") == "inter-router":
-            inter_router_links.append(item)
-
-    return inter_router_links
+    return [item for item in rc if item.get("linkType") == "inter-router"]
 
 
 class Timestamp:
@@ -1601,7 +1615,7 @@ class Logger:
         if self.save_for_dump:
             self.logs.append((ts, msg))
         if self.print_to_console:
-            print("%s %s" % (ts, msg))
+            print(f"{ts} {msg}")
             sys.stdout.flush()
         if self.python_log_level is not None:
             logline = f"{ts} {self.title}: {msg}"
@@ -1617,10 +1631,8 @@ class Logger:
 
     def __str__(self):
         lines = [self.title]
-        for ts, msg in self.logs:
-            lines.append("%s %s" % (ts, msg))
-        res = str('\n'.join(lines))
-        return res
+        lines.extend(f"{ts} {msg}" for ts, msg in self.logs)
+        return '\n'.join(lines)
 
 
 def curl_available():

@@ -75,18 +75,18 @@ class HostStruct:
             foundFirst = False
             saddr = ""
             sfamily = socket.AF_UNSPEC
-            for i0 in range(0, len(res)):
+            for i0 in range(len(res)):
                 family, dum0, dum1, dum2, sockaddr = res[i0]
-                if not foundFirst:
-                    if family in self.families:
-                        saddr = sockaddr[0]
-                        sfamily = family
-                        foundFirst = True
-                else:
-                    if family in self.families:
-                        if not saddr == sockaddr[0] or not sfamily == family:
-                            raise PolicyError("HostStruct: '%s' resolves to multiple IP addresses" %
-                                              hostname)
+                if foundFirst:
+                    if family in self.families and (
+                        saddr != sockaddr[0] or sfamily != family
+                    ):
+                        raise PolicyError("HostStruct: '%s' resolves to multiple IP addresses" %
+                                          hostname)
+                elif family in self.families:
+                    saddr = sockaddr[0]
+                    sfamily = family
+                    foundFirst = True
             if not foundFirst:
                 raise PolicyError("HostStruct: '%s' did not resolve to one of the supported address family" %
                                   hostname)
@@ -106,11 +106,7 @@ class HostStruct:
         return self.__str__()
 
     def dump(self):
-        return ("(%s, %s, %s, %s)" %
-                (self.name,
-                 self.saddr,
-                 "AF_INET" if self.family == socket.AF_INET else "AF_INET6",
-                 binascii.hexlify(self.binary)))
+        return f'({self.name}, {self.saddr}, {"AF_INET" if self.family == socket.AF_INET else "AF_INET6"}, {binascii.hexlify(self.binary)})'
 
 #
 #
@@ -154,7 +150,7 @@ class HostAddr:
             self.hoststructs.append(HostStruct(hosts[0]))
             if len(hosts) > 1:
                 self.hoststructs.append(HostStruct(hosts[1]))
-                if not self.hoststructs[0].family == self.hoststructs[1].family:
+                if self.hoststructs[0].family != self.hoststructs[1].family:
                     raise PolicyError("mixed IPv4 and IPv6 host specs in range not allowed")
                 c0 = self.memcmp(self.hoststructs[0].binary, self.hoststructs[1].binary)
                 if c0 > 0:
@@ -165,7 +161,7 @@ class HostAddr:
             return "*"
         res = self.hoststructs[0].name
         if len(self.hoststructs) > 1:
-            res += "," + self.hoststructs[1].name
+            res += f",{self.hoststructs[1].name}"
         return res
 
     def __repr__(self):
@@ -174,15 +170,15 @@ class HostAddr:
     def dump(self):
         if self.wildcard:
             return "(*)"
-        res = "(" + self.hoststructs[0].dump()
+        res = f"({self.hoststructs[0].dump()}"
         if len(self.hoststructs) > 1:
-            res += "," + self.hoststructs[1].dump()
+            res += f",{self.hoststructs[1].dump()}"
         res += ")"
         return res
 
     def memcmp(self, a: bytes, b: bytes) -> int:
         res = 0
-        for i in range(0, len(a)):
+        for i in range(len(a)):
             if a[i] > b[i]:
                 res = 1
                 break
@@ -200,7 +196,7 @@ class HostAddr:
         if self.wildcard:
             return True
         try:
-            if not candidate.family == self.hoststructs[0].family:
+            if candidate.family != self.hoststructs[0].family:
                 # sorry, wrong AF_INET family
                 return False
             c0 = self.memcmp(candidate.binary, self.hoststructs[0].binary)
@@ -211,8 +207,10 @@ class HostAddr:
         except PolicyError:
             return False
         except Exception as e:
-            assert isinstance(candidate, HostStruct), \
-                ("Wrong type. Expected HostStruct but received %s" % candidate.__class__.__name__)
+            assert isinstance(
+                candidate, HostStruct
+            ), f"Wrong type. Expected HostStruct but received {candidate.__class__.__name__}"
+
             return False
 
     def match_str(self, candidate: str) -> bool:
@@ -270,11 +268,11 @@ class PolicyAppConnectionMgr:
     def __str__(self):
         res = ("Connection Limits: total: %s, per user: %s, per host: %s\n" %
                (self.max_total, self.max_per_user, self.max_per_host))
-        res += ("Connections Statistics: total approved: %s, total denied: %s" %
-                (self.connections_approved, self.connections_denied))
-        res += ("Connection State: total current: %s" % self.connections_active)
+        res += f"Connections Statistics: total approved: {self.connections_approved}, total denied: {self.connections_denied}"
+
+        res += f"Connection State: total current: {self.connections_active}"
         res += ("User state: %s\n" % self.per_user_state)
-        res += ("Host state: %s"   % self.per_host_state)
+        res += f"Host state: {self.per_host_state}"
         return res
 
     def __repr__(self):
@@ -312,13 +310,8 @@ class PolicyAppConnectionMgr:
         @param[out] diags on failure holds 1, 2, or 3 error strings
         @return connection is allowed and tracked in state tables
         """
-        n_user = 0
-        if user in self.per_user_state:
-            n_user = len(self.per_user_state[user])
-        n_host = 0
-        if host in self.per_host_state:
-            n_host = len(self.per_host_state[host])
-
+        n_user = len(self.per_user_state[user]) if user in self.per_user_state else 0
+        n_host = len(self.per_host_state[host]) if host in self.per_host_state else 0
         max_per_user = grp_max_user if grp_max_user is not None else self.max_per_user
         max_per_host = grp_max_host if grp_max_host is not None else self.max_per_host
 

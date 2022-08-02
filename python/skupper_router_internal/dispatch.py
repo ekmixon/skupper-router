@@ -137,8 +137,7 @@ FORBIDDEN = ["proton"]
 
 
 def check_forbidden() -> None:
-    bad = set(FORBIDDEN) & set(sys.modules)
-    if bad:
+    if bad := set(FORBIDDEN) & set(sys.modules):
         raise ImportError("Forbidden modules loaded: '%s'." % "', '".join(bad))
 
 

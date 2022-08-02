@@ -46,14 +46,11 @@ class Message:
             getattr(self, k)    # Check for bad attributes
 
     def __repr__(self):
-        return "%s(%s)" % (type(self).__name__,
-                           ", ".join("%s=%r" % (f, getattr(self, f)) for f in self._fields))
+        return f'{type(self).__name__}({", ".join(("%s=%r" % (f, getattr(self, f)) for f in self._fields))})'
 
 
 def simplify(msg):
-    m = {}
-    for k, v in msg.properties.items():
-        m[k] = v
+    m = dict(msg.properties.items())
     if msg.body:
         m["body"] = msg.body.decode()
     if msg.content_type:

@@ -117,8 +117,7 @@ class GrpcServiceMethodsTest(TestCase):
 
         # If you wanna try it without the router, set the grpc_channel
         # directly to the grpc_server_port
-        cls.grpc_channel = grpc.insecure_channel('127.0.0.1:%s' %
-                                                 cls.router_http_port)
+        cls.grpc_channel = grpc.insecure_channel(f'127.0.0.1:{cls.router_http_port}')
         cls.grpc_stub = FriendshipStub(cls.grpc_channel)
 
     @classmethod
@@ -186,9 +185,7 @@ class GrpcServiceMethodsTest(TestCase):
         for key in self.EXP_FRIENDS:
             pe = PersonEmail()
             pe.email = key
-            friends = []
-            for friend in self.grpc_stub.ListFriends(pe):
-                friends.append(friend.email)
+            friends = [friend.email for friend in self.grpc_stub.ListFriends(pe)]
             assert all(f in self.EXP_FRIENDS[key] for f in friends)
             assert all(f in friends for f in self.EXP_FRIENDS[key])
 
@@ -263,5 +260,8 @@ class GrpcServiceMethodsTestOverTls(GrpcServiceMethodsTest, RouterTestSslBase):
 
         # The GRPC client is opening a secure channel to the TLS enabled router listener port which has its
         # sslProfile as http-listener-ssl-profile
-        cls.secure_grpc_channel = grpc.secure_channel('localhost:%s' % cls.router_http_port, credentials=credentials)
+        cls.secure_grpc_channel = grpc.secure_channel(
+            f'localhost:{cls.router_http_port}', credentials=credentials
+        )
+
         cls.grpc_stub = FriendshipStub(cls.secure_grpc_channel)

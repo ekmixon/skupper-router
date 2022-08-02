@@ -39,13 +39,15 @@ class Adapter:
         print("Adapter.log(%d): domain=%s, text=%s" % (level, self._domain, text))
 
     def send(self, dest, opcode, body):
-        print("Adapter.send: domain=%s, dest=%s, opcode=%s, body=%s" % (self._domain, dest, opcode, body))
+        print(
+            f"Adapter.send: domain={self._domain}, dest={dest}, opcode={opcode}, body={body}"
+        )
 
     def remote_bind(self, subject, peer):
-        print("Adapter.remote_bind: subject=%s, peer=%s" % (subject, peer))
+        print(f"Adapter.remote_bind: subject={subject}, peer={peer}")
 
     def remote_unbind(self, subject, peer):
-        print("Adapter.remote_unbind: subject=%s, peer=%s" % (subject, peer))
+        print(f"Adapter.remote_unbind: subject={subject}, peer={peer}")
 
     def node_updated(self, address, reachable, neighbor, link_bit, router_bit):
         print("Adapter.node_updated: address=%s, reachable=%r, neighbor=%r, link_bit=%d, router_bit=%d" %

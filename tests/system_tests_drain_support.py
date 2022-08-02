@@ -74,7 +74,7 @@ class DrainMessagesHandler(MessagingHandler):
 
     def on_message(self, event):
         if event.receiver == self.receiver:
-            if "Hello World" == event.message.body:
+            if event.message.body == "Hello World":
                 self.received_count += 1
 
             if self.received_count < 4:
@@ -95,26 +95,27 @@ class DrainOneMessageHandler(DrainMessagesHandler):
         super(DrainOneMessageHandler, self).__init__(address)
 
     def on_message(self, event):
-        if event.receiver == self.receiver:
-            if "Hello World" == event.message.body:
-                self.received_count += 1
+        if event.receiver != self.receiver:
+            return
+        if event.message.body == "Hello World":
+            self.received_count += 1
 
-            if self.received_count < 4:
-                event.receiver.flow(1)
-            elif self.received_count == 4:
-                # We are issuing a drain of 1 after we receive the 4th message.
-                # This means that going forward, we will receive only one more message.
-                event.receiver.drain(1)
+        if self.received_count < 4:
+            event.receiver.flow(1)
+        elif self.received_count == 4:
+            # We are issuing a drain of 1 after we receive the 4th message.
+            # This means that going forward, we will receive only one more message.
+            event.receiver.drain(1)
 
-            # The fact that the event.link.credit is 0 means that the receiver will not be receiving any more
-            # messages. That along with 5 messages received (4 earlier messages and 1 extra message for drain=1)
-            # indicates that the drain worked and we can declare that the test is successful
-            if self.received_count == 5 and event.link.credit == 0:
-                self.error = None
-                self.timer.cancel()
-                self.receiver.close()
-                self.sender.close()
-                self.conn.close()
+        # The fact that the event.link.credit is 0 means that the receiver will not be receiving any more
+        # messages. That along with 5 messages received (4 earlier messages and 1 extra message for drain=1)
+        # indicates that the drain worked and we can declare that the test is successful
+        if self.received_count == 5 and event.link.credit == 0:
+            self.error = None
+            self.timer.cancel()
+            self.receiver.close()
+            self.sender.close()
+            self.conn.close()
 
 
 class DrainNoMessagesHandler(MessagingHandler):
@@ -242,16 +243,33 @@ class DrainMessagesMoreHandler(MessagingHandler):
         self.verbose_printing = False
 
     def show_state(self):
-        return str("send_phase:" + str(self.send_phase)
-                   + ", sent_count:" + str(self.sent_count)
-                   + ", recv_phase:" + str(self.recv_phase)
-                   + ", receive_count:" + str(self.received_count)
-                   + ", receiver_credit:" + str(self.receiver.credit)
-                   + ", sender_credit:" + str(self.sender.credit))
+        return str(
+            (
+                (
+                    (
+                        (
+                            (
+                                f"send_phase:{str(self.send_phase)}"
+                                + ", sent_count:"
+                            )
+                            + str(self.sent_count)
+                            + ", recv_phase:"
+                        )
+                        + str(self.recv_phase)
+                        + ", receive_count:"
+                    )
+                    + str(self.received_count)
+                    + ", receiver_credit:"
+                )
+                + str(self.receiver.credit)
+                + ", sender_credit:"
+            )
+            + str(self.sender.credit)
+        )
 
     def printme(self, str):
         if self.verbose_printing:
-            print(str + " " + self.show_state())
+            print(f"{str} {self.show_state()}")
 
     def timeout(self):
         self.error = "Timeout Expired: sent: %d rcvd: %d" % (self.sent_count, self.received_count)
@@ -306,7 +324,7 @@ class DrainMessagesMoreHandler(MessagingHandler):
 
     def on_message(self, event):
         if event.receiver == self.receiver:
-            if "Hello World" == event.message.body:
+            if event.message.body == "Hello World":
                 self.received_count += 1
 
             if self.recv_phase == 1 and self.received_count < 4:

@@ -51,8 +51,7 @@ def image_file(name):
 @app.route("/myinfo/delete/<id>", methods=["DELETE"])
 async def delete_myinfo(id):  # noqa
     my_info.id = id
-    jsonStr = json.dumps(my_info.__dict__)
-    return jsonStr
+    return json.dumps(my_info.__dict__)
 
 
 @app.route('/myinfo', methods=['GET', 'POST', 'PUT'])
@@ -60,15 +59,14 @@ async def create_myinfo():
     form = await request.form
     fname = form['fname']
     lname = form['lname']
-    message = "Success! Your first name is %s, last name is %s" % (fname, lname)
-    return message
+    return f"Success! Your first name is {fname}, last name is {lname}"
 
 
 def large_string(length):
     i = 0
     ret_string = ""
     while i < length:
-        ret_string += str(i) + ","
+        ret_string += f"{i},"
         i += 1
     return ret_string
 

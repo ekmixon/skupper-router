@@ -46,8 +46,7 @@ class AddressCheckResponse:
         return self.attrs[key]
 
     def __str__(self):
-        return "Address Check Response: status=%s desc=%s attrs=%s" % \
-            (self.status_code, self.status_description, self.attrs)
+        return f"Address Check Response: status={self.status_code} desc={self.status_description} attrs={self.attrs}"
 
 
 class AddressChecker:
@@ -840,7 +839,9 @@ class DynamicReplyTo(MessagingHandler):
         self.server_connection.close()
 
     def address_check_timeout(self):
-        self.addr_check_sender.send(self.addr_checker.make_address_query("M" + self.dest))
+        self.addr_check_sender.send(
+            self.addr_checker.make_address_query(f"M{self.dest}")
+        )
 
     def bail(self):
         self.timer.cancel()
@@ -877,11 +878,14 @@ class DynamicReplyTo(MessagingHandler):
             self.server_receiver_ready = True
         if not self.client_receiver_ready and event.receiver == self.client_receiver:
             self.client_receiver_ready = True
-        if self.server_receiver_ready and self.client_receiver_ready:
-            if self.num_attempts == 0:
-                self.reply_to_addr = self.client_receiver.remote_source.address
-                self.num_attempts += 1
-                self.addr_check_timer = event.reactor.schedule(3, AddressCheckerTimeout(self))
+        if (
+            self.server_receiver_ready
+            and self.client_receiver_ready
+            and self.num_attempts == 0
+        ):
+            self.reply_to_addr = self.client_receiver.remote_source.address
+            self.num_attempts += 1
+            self.addr_check_timer = event.reactor.schedule(3, AddressCheckerTimeout(self))
 
     def on_sendable(self, event):
         if self.reply_to_addr is None:
@@ -902,14 +906,14 @@ class DynamicReplyTo(MessagingHandler):
             # Create the senders if the address has propagated.
             if response.status_code == 200 and response.remoteCount == 1:
                 self.create_senders()
+            elif self.num_attempts < 2:
+                self.num_attempts += 1
+                self.addr_check_timer = event.reactor.schedule(3, AddressCheckerTimeout(self))
             else:
-                if self.num_attempts < 2:
-                    self.num_attempts += 1
-                    self.addr_check_timer = event.reactor.schedule(3, AddressCheckerTimeout(self))
-                else:
-                    self.error = "Address %s did not propagate to the router to which the sender is attached" % self.dest
-                    self.bail()
-                    return
+                self.error = f"Address {self.dest} did not propagate to the router to which the sender is attached"
+
+                self.bail()
+                return
 
         # Server gets a request and responds to
         # the address that is embedded in the message.
@@ -979,7 +983,7 @@ class ClosestTest (MessagingHandler):
         self.router_2    = router_2
         self.router_3    = router_3
         self.addr_suffix = addr_suffix
-        self.dest        = "closest/" + addr_suffix
+        self.dest = f"closest/{addr_suffix}"
 
         # after send_batch sent messages are accepted, verify the closest
         # receivers have consumed the batch.
@@ -1004,8 +1008,10 @@ class ClosestTest (MessagingHandler):
     def _new_message(self):
         """Add expected rx for log tracing
         """
-        return Message(body="%s: Hello, %s." % (self.test_name, self.closest_rx.name),
-                       address=self.dest)
+        return Message(
+            body=f"{self.test_name}: Hello, {self.closest_rx.name}.",
+            address=self.dest,
+        )
 
     def timeout(self):
         self.bail("Timeout Expired")
@@ -1018,7 +1024,7 @@ class ClosestTest (MessagingHandler):
         self.cnx_2.close()
         self.cnx_3.close()
         if error_text:
-            self._logger.log("Test failed: %s" % error_text)
+            self._logger.log(f"Test failed: {error_text}")
             self._logger.dump()
 
     def on_start(self, event):
@@ -1044,7 +1050,7 @@ class ClosestTest (MessagingHandler):
         self.closest_rx = self.recv_1
 
     def on_link_opened(self, event):
-        self._logger.log("Link opened: %s" % event.link.name)
+        self._logger.log(f"Link opened: {event.link.name}")
         if event.link.is_receiver:
             if event.receiver == self.addr_check_receiver:
                 # Phase 2: address checker address available:
@@ -1057,7 +1063,7 @@ class ClosestTest (MessagingHandler):
             elif self.rx_opened != 3:
                 # Phase 1: wait for receivers to come up
                 assert event.receiver in [self.recv_1, self.recv_2, self.recv_3]
-                self._logger.log("Test receiver link opened: %s" % event.link.name)
+                self._logger.log(f"Test receiver link opened: {event.link.name}")
                 self.rx_opened += 1
                 if self.rx_opened == 3:
                     # All test receivers links open, start Phase 2:
@@ -1072,7 +1078,7 @@ class ClosestTest (MessagingHandler):
             self.addr_check()
 
     def on_message(self, event):
-        self._logger.log("on_message %s" % event.receiver.name)
+        self._logger.log(f"on_message {event.receiver.name}")
         if event.receiver == self.addr_check_receiver:
             # This is a response to one of my address-readiness checking messages.
             response = self.addr_checker.parse_address_query_response(event.message)
@@ -1087,7 +1093,7 @@ class ClosestTest (MessagingHandler):
             else:
                 # Not ready yet - poll again. This will continue until either
                 # the routers have updated or the test times out
-                self._logger.log("Network not ready yet: %s" % response)
+                self._logger.log(f"Network not ready yet: {response}")
                 self.addr_check_receiver.flow(1)
                 sleep(0.25)
                 self.addr_check()
@@ -1099,27 +1105,26 @@ class ClosestTest (MessagingHandler):
             # each receiver.
             if event.receiver == self.recv_1:
                 self.rx_count_1 += 1
-                self._logger.log("RX 1 got message, total=%s" % self.rx_count_1)
+                self._logger.log(f"RX 1 got message, total={self.rx_count_1}")
             elif event.receiver == self.recv_2:
                 self.rx_count_2 += 1
-                self._logger.log("RX 2 got message, total=%s" % self.rx_count_2)
+                self._logger.log(f"RX 2 got message, total={self.rx_count_2}")
             elif event.receiver == self.recv_3:
                 self.rx_count_3 += 1
-                self._logger.log("RX 3 got message, total=%s" % self.rx_count_3)
+                self._logger.log(f"RX 3 got message, total={self.rx_count_3}")
             else:
                 self.bail("Unexpected receiver?")
 
     def on_sendable(self, event):
-        self._logger.log("on_sendable %s" % event.sender.name)
-        if event.sender == self.sender:
-            if self.n_sent == 0:
+        self._logger.log(f"on_sendable {event.sender.name}")
+        if event.sender == self.sender and self.n_sent == 0:
                 # only have one message outstanding
-                self._logger.log("sending (sent=%s)" % self.n_sent)
-                self.sender.send(self._new_message())
-                self.n_sent += 1
+            self._logger.log(f"sending (sent={self.n_sent})")
+            self.sender.send(self._new_message())
+            self.n_sent += 1
 
     def on_settled(self, event):
-        self._logger.log("On settled, link: %s" % event.link.name)
+        self._logger.log(f"On settled, link: {event.link.name}")
         if event.link == self.sender:
             dlv = event.delivery
             if dlv.remote_state == Delivery.ACCEPTED:
@@ -1165,7 +1170,7 @@ class ClosestTest (MessagingHandler):
                 else:
                     self.bail("Error: self.closest_rx no match!")
             else:
-                self._logger.log("Delivery Not Accepted: %s" % dlv.remote_state)
+                self._logger.log(f"Delivery Not Accepted: {dlv.remote_state}")
                 if dlv.remote_state == Delivery.RELEASED:
                     # This occurs when the loss-of-rx-link event has not been
                     # propagated to all routers. When that happens the message
@@ -1176,11 +1181,10 @@ class ClosestTest (MessagingHandler):
                     self.sender.send(self._new_message())
                     self.n_sent += 1
                 else:
-                    self.bail("Error: unexpected delivery failure: %s"
-                              % dlv.remote_state)
+                    self.bail(f"Error: unexpected delivery failure: {dlv.remote_state}")
 
     def on_link_closed(self, event):
-        self._logger.log("Link closed %s" % event.link.name)
+        self._logger.log(f"Link closed {event.link.name}")
         if event.link == self.recv_1 and self.closest_rx == self.recv_2:
             self._logger.log("Next send for RX 2")
             sleep(2.0)  # give time for the link loss to propagate
@@ -1202,7 +1206,9 @@ class ClosestTest (MessagingHandler):
         # because that's what the router does internally.  Someday this
         # may change.
         self._logger.log("Query addresses...")
-        self.addr_check_sender.send(self.addr_checker.make_address_query("M" + self.dest))
+        self.addr_check_sender.send(
+            self.addr_checker.make_address_query(f"M{self.dest}")
+        )
 
     def run(self):
         container = Container(self)
@@ -1238,7 +1244,7 @@ class BalancedTest (MessagingHandler):
         self.router_2    = router_2
         self.router_1    = router_1
         self.addr_suffix = addr_suffix
-        self.dest        = "balanced/" + addr_suffix
+        self.dest = f"balanced/{addr_suffix}"
 
         self.total_messages  = total_messages
         self.n_sent          = 0
@@ -1315,11 +1321,7 @@ class BalancedTest (MessagingHandler):
         if event.receiver == self.address_check_receiver:
             # This is one of my route-readiness checking messages.
             response = self.address_checker.parse_address_query_response(event.message)
-            if self.omit_middle_receiver is True :
-                expected_remotes = 1
-            else :
-                expected_remotes = 2
-
+            expected_remotes = 1 if self.omit_middle_receiver is True else 2
             if response.status_code == 200 and response.subscriberCount == 1 and response.remoteCount == expected_remotes:
                 # Got confirmation of dest addr fully propagated through network.
                 # Since I have 3 nodes, I want to see 1 subscriber (which is on the local router) and
@@ -1349,8 +1351,8 @@ class BalancedTest (MessagingHandler):
             # because it always will be due to how the code counts things.
             if self.n_received == self.total_messages:
                 if abs(self.count_1 - self.expected_1) > self.slop or \
-                   abs(self.count_2 - self.expected_2) > self.slop or \
-                   abs(self.count_3 - self.expected_3) > self.slop  :
+                       abs(self.count_2 - self.expected_2) > self.slop or \
+                       abs(self.count_3 - self.expected_3) > self.slop  :
                     self.bail("expected: ( %d, %d, %d )  got: ( %d, %d, %d )" % (self.expected_1, self.expected_2, self.expected_3, self.count_1, self.count_2, self.count_3))
                 else:
                     self.bail(None)  # All is well.
@@ -1371,7 +1373,9 @@ class BalancedTest (MessagingHandler):
         # BUGALERT: We have to prepend the 'M' to this address prefix
         # because that's what the router does internally.  Someday this
         # may change.
-        self.address_check_sender.send(self.address_checker.make_address_query("M" + self.dest))
+        self.address_check_sender.send(
+            self.address_checker.make_address_query(f"M{self.dest}")
+        )
 
     def run(self):
         container = Container(self)
@@ -1397,7 +1401,7 @@ class MulticastTest (MessagingHandler):
         self.router_2    = router_2
         self.router_3    = router_3
         self.addr_suffix = addr_suffix
-        self.dest        = "multicast/" + addr_suffix
+        self.dest = f"multicast/{addr_suffix}"
 
         self.n_to_send = 100
         self.n_sent    = 0
@@ -1506,7 +1510,7 @@ class MulticastTest (MessagingHandler):
                 # If the latest check did not find the link-attack route ready,
                 # schedule another check a little while from now.
                 self.addr_check_timer = event.reactor.schedule(0.25, AddressCheckerTimeout(self))
-        else :
+        else:
             # This is a payload message.
             self.n_received += 1
 
@@ -1525,16 +1529,16 @@ class MulticastTest (MessagingHandler):
             elif event.receiver == self.recv_3_b:
                 self.count_3_b += 1
 
-            if self.n_received >= 6 * self.n_to_send :
+            if self.n_received >= 6 * self.n_to_send:
                 # In multicast, everybody gets everything.
                 # Our reception count should be 6x our send-count,
                 # and all receiver-counts should be equal.
-                if self.count_1_a == self.count_1_b and self.count_1_b == self.count_2_a and self.count_2_a == self.count_2_b and self.count_2_b == self.count_3_a and self.count_3_a == self.count_3_b :
+                if self.count_1_a == self.count_1_b and self.count_1_b == self.count_2_a and self.count_2_a == self.count_2_b and self.count_2_b == self.count_3_a and self.count_3_a == self.count_3_b:
                     self.bail(None)
-                    self.bailed = True
                 else:
                     self.bail("receivers not equal: %d %d %d %d %d %d" % (self.count_1_a, self.count_1_b, self.count_2_a, self.count_2_b, self.count_3_a, self.count_3_b))
-                    self.bailed = True
+
+                self.bailed = True
 
     def addr_check(self):
         # Send the message that will query the management code to discover
@@ -1544,7 +1548,9 @@ class MulticastTest (MessagingHandler):
         # BUGALERT: We have to prepend the 'M' to this address prefix
         # because that's what the router does internally.  Someday this
         # may change.
-        self.addr_check_sender.send(self.addr_checker.make_address_query("M" + self.dest))
+        self.addr_check_sender.send(
+            self.addr_checker.make_address_query(f"M{self.dest}")
+        )
 
     def run(self):
         container = Container(self)

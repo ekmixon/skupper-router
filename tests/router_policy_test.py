@@ -41,7 +41,7 @@ class PolicyHostAddrTest(TestCase):
             xxx = HostStruct(badhostname)
         except PolicyError:
             denied = True
-        self.assertTrue(denied, ("%s" % msg))
+        self.assertTrue(denied, f"{msg}")
 
     def check_hostaddr_match(self, tHostAddr, tString, expectOk=True):
         # check that the string is a match for the addr
@@ -136,23 +136,23 @@ class MockPolicyManager:
         self.logs = []
 
     def log_debug(self, text):
-        print("DEBUG: %s" % text)
+        print(f"DEBUG: {text}")
         self.logs.append(text)
 
     def log_info(self, text):
-        print("INFO: %s" % text)
+        print(f"INFO: {text}")
         self.logs.append(text)
 
     def log_trace(self, text):
-        print("TRACE: %s" % text)
+        print(f"TRACE: {text}")
         self.logs.append(text)
 
     def log_error(self, text):
-        print("ERROR: %s" % text)
+        print(f"ERROR: {text}")
         self.logs.append(text)
 
     def log_warning(self, text):
-        print("WARNING: %s" % text)
+        print(f"WARNING: {text}")
         self.logs.append(text)
 
     def get_agent(self):
@@ -340,9 +340,14 @@ class PolicyAppConnectionMgrTests(TestCase):
     def test_policy_app_conn_mgr_larger_counts(self):
         stats = PolicyAppConnectionMgr(10000, 10000, 10000)
         diags = []
-        for i in range(0, 10000):
-            self.assertTrue(stats.can_connect('1.1.1.1:' + str(i), 'chuck', '1.1.1.1', diags, None, None))
-            self.assertTrue(len(diags) == 0)
+        for i in range(10000):
+            self.assertTrue(
+                stats.can_connect(
+                    f'1.1.1.1:{str(i)}', 'chuck', '1.1.1.1', diags, None, None
+                )
+            )
+
+            self.assertTrue(not diags)
         self.assertFalse(stats.can_connect('1.1.1.1:10000', 'chuck', '1.1.1.1', diags, None, None))
         self.assertTrue(len(diags) == 3)
         self.assertTrue(stats.connections_active == 10000)

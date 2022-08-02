@@ -97,7 +97,7 @@ class RouterMessageLogTestAll(RouterMessageLogTestBase):
         message_logs = [log for log in logs if log[0] == 'MESSAGE']
         self.assertTrue(message_logs)
         test_message = [log for log in message_logs if "message-id=\"123455\"" in log[2]]
-        self.assertTrue(2 == len(test_message), message_logs)  # Sent and Received
+        self.assertTrue(len(test_message) == 2, message_logs)
         self.assertIn('Received', test_message[0][2])
         self.assertIn('Sent', test_message[1][2])
         for log in test_message:
@@ -140,12 +140,8 @@ class RouterMessageLogTestNone(RouterMessageLogTestBase):
         test.run()
         self.assertTrue(test.message_received)
 
-        everything_ok = True
         logs = json.loads(self.run_skmanage("get-log"))
-        for log in logs:
-            if log[0] == 'MESSAGE':
-                everything_ok = False
-
+        everything_ok = all(log[0] != 'MESSAGE' for log in logs)
         self.assertTrue(everything_ok)
 
 
@@ -200,29 +196,32 @@ class LogMessageTest(MessagingHandler):
         event.container.create_receiver(conn, self.dest)
 
     def on_sendable(self, event):
-        if not self.sent:
-            msg = Message()
-            msg.address = self.address
-            msg.id = '123455'
-            msg.user_id = BINARY('testuser')
-            msg.subject = 'test-subject'
-            msg.content_type = 'text/html; charset=utf-8'
-            msg.correlation_id = 89
-            msg.creation_time = 1487772623.883
-            msg.group_id = "group1"
-            msg.reply_to = 'hello_world'
-            msg.content_encoding = 'gzip, deflate'
-            msg.reply_to_group_id = "group0"
-            application_properties = dict()
-            application_properties['app-property'] = [10, 20, 30]
-            application_properties['some-other'] = symbol("O_one")
-            msg.properties = application_properties
-            msg.body = ["Hello World!", BIG_BODY]
-            event.sender.send(msg)
-            self.sent = True
+        if self.sent:
+            return
+        msg = Message()
+        msg.address = self.address
+        msg.id = '123455'
+        msg.user_id = BINARY('testuser')
+        msg.subject = 'test-subject'
+        msg.content_type = 'text/html; charset=utf-8'
+        msg.correlation_id = 89
+        msg.creation_time = 1487772623.883
+        msg.group_id = "group1"
+        msg.reply_to = 'hello_world'
+        msg.content_encoding = 'gzip, deflate'
+        msg.reply_to_group_id = "group0"
+        application_properties = {
+            'app-property': [10, 20, 30],
+            'some-other': symbol("O_one"),
+        }
+
+        msg.properties = application_properties
+        msg.body = ["Hello World!", BIG_BODY]
+        event.sender.send(msg)
+        self.sent = True
 
     def on_message(self, event):
-        if "Hello World!" == event.message.body[0]:
+        if event.message.body[0] == "Hello World!":
             self.message_received = True
         event.connection.close()
 

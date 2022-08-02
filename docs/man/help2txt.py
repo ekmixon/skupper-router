@@ -34,7 +34,7 @@ def help2txt(help_out):
     VALUE = r"(?:[\w-]+|<[^>]+>)"
     DEFAULT = r"(?: +\([^)]+\))?"
     OPTION = r"-[\w-]+(?:[ =]%s)?%s" % (VALUE, DEFAULT)  # -opt[(=| )value][(default)]
-    OPTIONS = r"%s(?:, *%s)*" % (OPTION, OPTION)  # opt[,opt...]
+    OPTIONS = f"{OPTION}(?:, *{OPTION})*"
     HELP = r"(?:[ \t]+\w.*$)|(?:(?:\n[ \t]+[^-\s].*$)+)"  # same line or following lines indented.
     OPT_HELP = r"^\s+(%s)(%s)" % (OPTIONS, HELP)
     SUBHEAD = r"^((?: +\w+)*):$"
@@ -51,7 +51,7 @@ def help2txt(help_out):
     def heading(text, depth):
         return "%s %s\n\n" % ("=" * depth, text)
 
-    for item in re.finditer(r"%s|%s" % (OPT_HELP, SUBHEAD), help_out, re.IGNORECASE | re.MULTILINE):
+    for item in re.finditer(f"{OPT_HELP}|{SUBHEAD}", help_out, re.IGNORECASE | re.MULTILINE):
         if item.group(3):
             result += heading(item.group(3).strip(), 3)
         else:

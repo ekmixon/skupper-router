@@ -79,7 +79,7 @@ class Node:
                        "off"  : False}
         if isinstance(attrs, dict):
             for key in attrs.keys():
-                if isinstance(attrs[key], str) and attrs[key] in BOOL_VALUES.keys():
+                if isinstance(attrs[key], str) and attrs[key] in BOOL_VALUES:
                     attrs[key] = BOOL_VALUES[attrs[key]]
 
         return attrs
@@ -101,9 +101,9 @@ class Node:
         if url_.path is not None:
             path = url_.path
         elif router:
-            path = '_topo/0/%s/$management' % router
+            path = f'_topo/0/{router}/$management'
         elif edge_router:
-            path = '_edge/%s/$management' % edge_router
+            path = f'_edge/{edge_router}/$management'
         else:
             path = '$management'
         connection = BlockingConnection(url,
@@ -139,7 +139,7 @@ class Node:
 
     def set_client(self, url_path):
         if url_path:
-            self.url.path = '%s' % url_path
+            self.url.path = f'{url_path}'
             self.client = SyncRequestResponse(self.connection, self.url.path)
 
     def close(self):
@@ -149,7 +149,7 @@ class Node:
             self.client = None
 
     def __repr__(self):
-        return "%s(%s)" % (self.__class__.__name__, self.url)
+        return f"{self.__class__.__name__}({self.url})"
 
     @staticmethod
     def check_response(response, expect=error.OK):
@@ -159,9 +159,10 @@ class Node:
         code = response.properties.get('statusCode')
         if code != expect:
             if 200 <= code <= 299:
-                raise ValueError("Response was %s(%s) but expected %s(%s): %s" % (
-                    code, error.STATUS_TEXT[code], expect, error.STATUS_TEXT[expect],
-                    response.properties.get('statusDescription')))
+                raise ValueError(
+                    f"Response was {code}({error.STATUS_TEXT[code]}) but expected {expect}({error.STATUS_TEXT[expect]}): {response.properties.get('statusDescription')}"
+                )
+
             else:
                 raise error.ManagementError.create(code, response.properties.get('statusDescription'))
 
@@ -294,10 +295,7 @@ class Node:
 
             offset += request_count
 
-        query_response = Node.QueryResponse(self,
-                                            response_attr_names,
-                                            response_results)
-        return query_response
+        return Node.QueryResponse(self, response_attr_names, response_results)
 
     def create(self, attributes=None, type=None, name=None):
         """

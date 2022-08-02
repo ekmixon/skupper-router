@@ -45,7 +45,7 @@ class QdSchema(schema.Schema):
         try:
             super(QdSchema, self).__init__(**json.loads(qd_schema, object_pairs_hook=OrderedDict))
         except Exception as e:
-            raise ValueError("Invalid schema skrouter.json: %s" % e)
+            raise ValueError(f"Invalid schema skrouter.json: {e}")
         self.configuration_entity = self.entity_type(self.CONFIGURATION_ENTITY)
         self.operational_entity = self.entity_type(self.OPERATIONAL_ENTITY)
 
@@ -92,12 +92,14 @@ class QdSchema(schema.Schema):
                 raise schema.ValidationError(
                     "role='inter-router' only allowed with router mode='interior' for %s" % list_conn_entity)
 
-        if router_mode and listener_role:
-            # Edge routers cannot have edge listeners. Other edge routers cannot make connections into this
-            # edge router
-            if router_mode == "edge" and listener_role == "edge":
-                raise schema.ValidationError(
-                    "role='edge' only allowed with router mode='interior' for %s" % list_conn_entity)
+        if (
+            router_mode
+            and listener_role
+            and router_mode == "edge"
+            and listener_role == "edge"
+        ):
+            raise schema.ValidationError(
+                "role='edge' only allowed with router mode='interior' for %s" % list_conn_entity)
 
     def is_configuration(self, entity_type: schema.EntityType) -> bool:
         return bool(entity_type and self.configuration_entity in entity_type.all_bases)

@@ -99,9 +99,11 @@ class ReceiverRejectTest(MessagingHandler):
             self.fail(None)
 
     def on_link_opened(self, event):
-        if event.receiver == self.receiver:
-            if event.receiver.remote_source.address is not None:
-                self.fail('Heartbeat receiver was unexpectedly opened')
+        if (
+            event.receiver == self.receiver
+            and event.receiver.remote_source.address is not None
+        ):
+            self.fail('Heartbeat receiver was unexpectedly opened')
 
     def run(self):
         Container(self).run()

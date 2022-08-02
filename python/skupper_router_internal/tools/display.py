@@ -22,9 +22,7 @@ from skupper_router_internal.compat import UNICODE
 
 
 def YN(val):
-    if val:
-        return 'Y'
-    return 'N'
+    return 'Y' if val else 'N'
 
 
 def Commas(value):
@@ -37,7 +35,7 @@ def Commas(value):
         right = sval[-3:]
         result = right + result
         if len(left) > 0:
-            result = ',' + result
+            result = f',{result}'
         sval = left
 
 
@@ -68,9 +66,7 @@ def NumKMG(value, base=1000):
         # adjust the precision based on the size
         if fp < 10.0:
             return "%.2f %s" % (fp, suffix)
-        if fp < 100.0:
-            return "%.1f %s" % (fp, suffix)
-        return "%.0f %s" % (fp, suffix)
+        return "%.1f %s" % (fp, suffix) if fp < 100.0 else "%.0f %s" % (fp, suffix)
 
     if value < base:
         return "%d" % value
@@ -121,13 +117,9 @@ class Header:
             if self.format == Header.KiMiGi:
                 return NumKMG(value, base=1024)
             if self.format == Header.YN:
-                if value:
-                    return 'Y'
-                return 'N'
+                return 'Y' if value else 'N'
             if self.format == Header.Y:
-                if value:
-                    return 'Y'
-                return ''
+                return 'Y' if value else ''
             if self.format == Header.TIME_LONG:
                 return TimeLong(value)
             if self.format == Header.TIME_SHORT:
@@ -138,9 +130,7 @@ class Header:
                 min = sec / 60
                 hour = min / 60
                 day = hour / 24
-                result = ""
-                if day > 0:
-                    result = "%dd " % day
+                result = "%dd " % day if day > 0 else ""
                 if hour > 0 or result != "":
                     result += "%dh " % (hour % 24)
                 if min > 0 or result != "":
@@ -155,10 +145,9 @@ class Header:
 
 def PlainNum(value):
     try:
-        ret_val = "%d" % value
-        return ret_val
+        return "%d" % value
     except:
-        return "%s" % value
+        return f"{value}"
 
 
 class BodyFormat:
@@ -194,15 +183,9 @@ class Display:
     def formattedTable(self, title, heads, rows):
         fRows = []
         for row in rows:
-            fRow = []
-            col = 0
-            for cell in row:
-                fRow.append(heads[col].formatted(cell))
-                col += 1
+            fRow = [heads[col].formatted(cell) for col, cell in enumerate(row)]
             fRows.append(fRow)
-        headtext = []
-        for head in heads:
-            headtext.append(head.text)
+        headtext = [head.text for head in heads]
         self.printTable(title, headtext, fRows)
 
     def table(self, title, heads, rows):
@@ -211,10 +194,10 @@ class Display:
         # Pad the rows to the number of heads
         for row in rows:
             diff = len(heads) - len(row)
-            for idx in range(diff):
+            for _ in range(diff):
                 row.append("")
 
-        print("%s" % title)
+        print(f"{title}")
         if len(rows) == 0:
             return
         colWidth = []
@@ -230,14 +213,14 @@ class Display:
             colWidth.append(width + self.tableSpacing)
             line = line + head
             if col < len(heads) - 1:
-                for i in range(colWidth[col] - len(head)):
-                    line = line + " "
+                for _ in range(colWidth[col] - len(head)):
+                    line = f"{line} "
             col = col + 1
         print(line)
         line = self.tablePrefix
         for width in colWidth:
-            for i in range(width):
-                line = line + "="
+            for _ in range(width):
+                line = f"{line}="
         print(line)
 
         for row in rows:
@@ -247,8 +230,8 @@ class Display:
                 text = UNICODE(row[col])
                 line = line + text
                 if col < len(heads) - 1:
-                    for i in range(width - len(text)):
-                        line = line + " "
+                    for _ in range(width - len(text)):
+                        line = f"{line} "
                 col = col + 1
             print(line)
 
@@ -265,11 +248,10 @@ class Display:
             """
             if len(text) == 0:
                 return ""
-            else:
-                text = text.replace(CSV_CONFIG.STRING_QUOTE, CSV_CONFIG.STRING_QUOTE * 2)
-                return CSV_CONFIG.STRING_QUOTE + text + CSV_CONFIG.STRING_QUOTE
+            text = text.replace(CSV_CONFIG.STRING_QUOTE, CSV_CONFIG.STRING_QUOTE * 2)
+            return CSV_CONFIG.STRING_QUOTE + text + CSV_CONFIG.STRING_QUOTE
 
-        print("%s" % title)
+        print(f"{title}")
         if len(rows) == 0:
             return
 
@@ -294,9 +276,7 @@ class Display:
         min = sec / 60
         hour = min / 60
         day = hour / 24
-        result = ""
-        if day > 0:
-            result = "%dd " % day
+        result = "%dd " % day if day > 0 else ""
         if hour > 0 or result != "":
             result += "%dh " % (hour % 24)
         if min > 0 or result != "":
@@ -333,9 +313,7 @@ class Sorter:
         if col == len(heads):
             raise Exception("sortCol '%s', not found in headers" % sortCol)
 
-        list = []
-        for row in rows:
-            list.append(Sortable(row, col))
+        list = [Sortable(row, col) for row in rows]
         list.sort()
         if not inc:
             list.reverse()

@@ -33,7 +33,7 @@ class Address(str):
         if addr.startswith(cls.AMQP):
             return str.__new__(addr)
         else:
-            return str.__new__(Address, "%s/%s" % (cls.AMQP, addr))
+            return str.__new__(Address, f"{cls.AMQP}/{addr}")
 
     @classmethod
     def mobile(cls, path):
@@ -49,9 +49,9 @@ class Address(str):
         @param path: Path part of address.
         @param area: Routing area (placeholder)
         """
-        addr = "%s/%s/%s" % (cls.TOPO, area, router_id)
+        addr = f"{cls.TOPO}/{area}/{router_id}"
         if path:
-            addr = "%s/%s" % (addr, path)
+            addr = f"{addr}/{path}"
         return Address(addr)
 
     def __repr__(self): return "Address(%r)" % str(self)

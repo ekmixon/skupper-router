@@ -169,7 +169,7 @@ class PolicyCompiler:
         @return v_min <= val <= v_max
         """
         try:
-            v_int = int(val)
+            v_int = val
         except ValueError as e:
             errors.append("Value '%s' does not resolve to an integer." % val)
             return False
@@ -364,15 +364,9 @@ class PolicyCompiler:
                             # a single token is present as a prefix, suffix, or embedded
                             # construct cChar, S1, S2 encodings to be added to eVal description
                             if v.startswith(utoken):
-                                # prefix
-                                eVal.append(PolicyKeys.KC_TUPLE_PREFIX)
-                                eVal.append('')
-                                eVal.append(v[v.find(utoken) + len(utoken):])
+                                eVal.extend((PolicyKeys.KC_TUPLE_PREFIX, '', v[v.find(utoken) + len(utoken):]))
                             elif v.endswith(utoken):
-                                # suffix
-                                eVal.append(PolicyKeys.KC_TUPLE_SUFFIX)
-                                eVal.append(v[0:v.find(utoken)])
-                                eVal.append('')
+                                eVal.extend((PolicyKeys.KC_TUPLE_SUFFIX, v[:v.find(utoken)], ''))
                             else:
                                 # embedded
                                 if key in [PolicyKeys.KW_SOURCE_PATTERN,
@@ -380,19 +374,21 @@ class PolicyCompiler:
                                     errors.append("Policy vhost '%s' user group '%s' policy key '%s' item '%s' may contain match pattern '%s' as a prefix or a suffix only." %
                                                   (vhostname, usergroup, key, v, utoken))
                                     return False
-                                eVal.append(PolicyKeys.KC_TUPLE_EMBED)
-                                eVal.append(v[0:v.find(utoken)])
-                                eVal.append(v[v.find(utoken) + len(utoken):])
+                                eVal.extend(
+                                    (
+                                        PolicyKeys.KC_TUPLE_EMBED,
+                                        v[: v.find(utoken)],
+                                        v[v.find(utoken) + len(utoken) :],
+                                    )
+                                )
+
                         else:
                             # ${user} token is absent
                             if v == PolicyKeys.KC_TUPLE_WILDCARD:
-                                eVal.append(PolicyKeys.KC_TUPLE_WILDCARD)
-                                eVal.append('')
-                                eVal.append('')
+                                eVal.extend((PolicyKeys.KC_TUPLE_WILDCARD, ''))
                             else:
-                                eVal.append(PolicyKeys.KC_TUPLE_ABSENT)
-                                eVal.append(v)
-                                eVal.append('')
+                                eVal.extend((PolicyKeys.KC_TUPLE_ABSENT, v))
+                            eVal.append('')
                     policy_out[key] = ','.join(eVal)
 
                 if key == PolicyKeys.KW_SOURCES:
@@ -518,11 +514,14 @@ class PolicyCompiler:
                     warnings.append("Policy vhost '%s' user group '%s' has no defined users. This policy has no effect" % (name, group))
 
         # Default connections require a default settings
-        if policy_out[PolicyKeys.KW_CONNECTION_ALLOW_DEFAULT]:
-            if PolicyKeys.KW_DEFAULT_SETTINGS not in policy_out[PolicyKeys.KW_GROUPS]:
-                errors.append("Policy vhost '%s' allows connections by default but default settings are not defined" %
-                              (name))
-                return False
+        if (
+            policy_out[PolicyKeys.KW_CONNECTION_ALLOW_DEFAULT]
+            and PolicyKeys.KW_DEFAULT_SETTINGS
+            not in policy_out[PolicyKeys.KW_GROUPS]
+        ):
+            errors.append("Policy vhost '%s' allows connections by default but default settings are not defined" %
+                          (name))
+            return False
 
         return True
 
@@ -563,13 +562,15 @@ class AppStats:
 
     def refresh_entity(self, attributes):
         """Refresh management attributes"""
-        entitymap = {}
-        entitymap[PolicyKeys.KW_VHOST_NAME] =     self.my_id
-        entitymap[PolicyKeys.KW_CONNECTIONS_APPROVED] = self.conn_mgr.connections_approved
-        entitymap[PolicyKeys.KW_CONNECTIONS_DENIED] =   self.conn_mgr.connections_denied
-        entitymap[PolicyKeys.KW_CONNECTIONS_CURRENT] =  self.conn_mgr.connections_active
-        entitymap[PolicyKeys.KW_PER_USER_STATE] =       self.conn_mgr.per_user_state
-        entitymap[PolicyKeys.KW_PER_HOST_STATE] =       self.conn_mgr.per_host_state
+        entitymap = {
+            PolicyKeys.KW_VHOST_NAME: self.my_id,
+            PolicyKeys.KW_CONNECTIONS_APPROVED: self.conn_mgr.connections_approved,
+            PolicyKeys.KW_CONNECTIONS_DENIED: self.conn_mgr.connections_denied,
+            PolicyKeys.KW_CONNECTIONS_CURRENT: self.conn_mgr.connections_active,
+            PolicyKeys.KW_PER_USER_STATE: self.conn_mgr.per_user_state,
+            PolicyKeys.KW_PER_HOST_STATE: self.conn_mgr.per_host_state,
+        }
+
         self._manager.get_agent().qd.qd_dispatch_policy_c_counts_refresh(self._cstats, entitymap)
         attributes.update(entitymap)
 
@@ -697,7 +698,7 @@ class PolicyLocal:
 
         if not result:
             raise PolicyError("Policy '%s' is invalid: %s" % (name, diag[0]))
-        if len(warnings) > 0:
+        if warnings:
             for warning in warnings:
                 self._manager.log_warning(warning)
 
@@ -721,7 +722,10 @@ class PolicyLocal:
             # Updating an existing ruleset.
             # Vhost aliases still cannot overlap but replacement is allowed
             for vhost_alias in candidate[PolicyKeys.KW_VHOST_ALIASES]:
-                if vhost_alias in self._vhost_aliases and not self._vhost_aliases[vhost_alias] == name:
+                if (
+                    vhost_alias in self._vhost_aliases
+                    and self._vhost_aliases[vhost_alias] != name
+                ):
                     raise PolicyError(
                         "Policy for vhost '%s' alias '%s' conflicts with existing alias for vhost '%s'" % (name, vhost_alias, self._vhost_aliases[vhost_alias]))
 
@@ -730,8 +734,7 @@ class PolicyLocal:
         if self.use_hostname_patterns:
             agent = self._manager.get_agent()
             # construct a list of names to be added
-            tnames = []
-            tnames.append(name)
+            tnames = [name]
             tnames += candidate[PolicyKeys.KW_VHOST_ALIASES]
             # create a list of names to undo in case a subsequent name does not work
             snames: List[str] = []
@@ -749,7 +752,7 @@ class PolicyLocal:
                 self._vhost_aliases[nname] = name
             if name not in self.statsdb:
                 self.statsdb[name] = AppStats(name, self._manager, candidate)
-            self._manager.log_info("Created policy rules for vhost %s" % name)
+            self._manager.log_info(f"Created policy rules for vhost {name}")
         else:
             # remove old aliases
             old_aliases = self.rulesetdb[name][PolicyKeys.KW_VHOST_ALIASES]
@@ -759,7 +762,7 @@ class PolicyLocal:
             for nname in candidate[PolicyKeys.KW_VHOST_ALIASES]:
                 self._vhost_aliases[nname] = name
             self.statsdb[name].update_ruleset(candidate)
-            self._manager.log_info("Updated policy rules for vhost %s" % name)
+            self._manager.log_info(f"Updated policy rules for vhost {name}")
         # TODO: ruleset lock
         self.rulesetdb[name] = {}
         self.rulesetdb[name].update(candidate)
@@ -879,15 +882,14 @@ class PolicyLocal:
                 usergroup = ruleset[PolicyKeys.RULESET_U2G_MAP][user]
             elif "*" in ruleset[PolicyKeys.RULESET_U2G_MAP]:
                 usergroup = ruleset[PolicyKeys.RULESET_U2G_MAP]["*"]
+            elif ruleset[PolicyKeys.KW_CONNECTION_ALLOW_DEFAULT]:
+                usergroup = PolicyKeys.KW_DEFAULT_SETTINGS
             else:
-                if ruleset[PolicyKeys.KW_CONNECTION_ALLOW_DEFAULT]:
-                    usergroup = PolicyKeys.KW_DEFAULT_SETTINGS
-                else:
-                    self._manager.log_info(
-                        "DENY AMQP Open for user '%s', rhost '%s', vhost '%s': "
-                        "User is not in a user group and unknown users are denied" % (user, rhost, vhost))
-                    stats.count_other_denial()
-                    return ""
+                self._manager.log_info(
+                    "DENY AMQP Open for user '%s', rhost '%s', vhost '%s': "
+                    "User is not in a user group and unknown users are denied" % (user, rhost, vhost))
+                stats.count_other_denial()
+                return ""
             groupsettings = ruleset[PolicyKeys.KW_GROUPS][usergroup]
 
             # User in usergroup allowed to connect from rhost?
@@ -971,9 +973,9 @@ class PolicyLocal:
                     "This vhost has no settings for the user group" % (vhost, groupname))
                 return False
 
-            upolicy.update(ruleset[PolicyKeys.KW_GROUPS][groupname])
+            upolicy |= ruleset[PolicyKeys.KW_GROUPS][groupname]
 
-            maxsize = upolicy.get(PolicyKeys.KW_MAX_MESSAGE_SIZE, None)
+            maxsize = upolicy.get(PolicyKeys.KW_MAX_MESSAGE_SIZE)
             if maxsize is None:
                 maxsize = ruleset.get(PolicyKeys.KW_MAX_MESSAGE_SIZE, None)
                 if maxsize is None:
@@ -999,7 +1001,8 @@ class PolicyLocal:
                 del self._connections[conn_id]
         except Exception as e:
             self._manager.log_trace(
-                "Policy internal error closing connection id %s. %s" % (conn_id, str(e)))
+                f"Policy internal error closing connection id {conn_id}. {str(e)}"
+            )
 
     def set_max_message_size(self, size: int) -> None:
         """
@@ -1017,8 +1020,11 @@ class PolicyLocal:
         Test function to load a policy.
         @return:
         """
-        ruleset_str = '["vhost", {"hostname": "photoserver", "maxConnections": 50, "maxConnectionsPerUser": 5, "maxConnectionsPerHost": 20, "allowUnknownUser": true, "aliases": "antialias",'
-        ruleset_str += '"groups": {'
+        ruleset_str = (
+            '["vhost", {"hostname": "photoserver", "maxConnections": 50, "maxConnectionsPerUser": 5, "maxConnectionsPerHost": 20, "allowUnknownUser": true, "aliases": "antialias",'
+            + '"groups": {'
+        )
+
         ruleset_str += '"anonymous":       { "users": "anonymous", "remoteHosts": "*", "maxFrameSize": 111111, "maxMessageSize": 111111, "maxSessionWindow": 111111, "maxSessions": 1, "maxSenders": 11, "maxReceivers": 11, "allowDynamicSource": false, "allowAnonymousSender": false, "sources": "public", "targets": "" },'
         ruleset_str += '"users":           { "users": "u1, u2", "remoteHosts": "*", "maxFrameSize": 222222, "maxMessageSize": 222222, "maxSessionWindow": 222222, "maxSessions": 2, "maxSenders": 22, "maxReceivers": 22, "allowDynamicSource": false, "allowAnonymousSender": false, "sources": "public, private", "targets": "public" },'
         ruleset_str += '"paidsubscribers": { "users": "p1, p2", "remoteHosts": "*", "maxFrameSize": 333333, "maxMessageSize": 333333, "maxSessionWindow": 333333, "maxSessions": 3, "maxSenders": 33, "maxReceivers": 33, "allowDynamicSource": true, "allowAnonymousSender": false, "sources": "public, private", "targets": "public, private" },'

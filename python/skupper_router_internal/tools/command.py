@@ -52,7 +52,7 @@ def main(run, argv=None, parser=None):
     except Exception as e:
         if "_QPID_DISPATCH_TOOLS_DEBUG_" in os.environ:
             raise
-        print("%s: %s" % (type(e).__name__, e))
+        print(f"{type(e).__name__}: {e}")
     return 1
 
 
@@ -64,9 +64,9 @@ def check_args(args, maxargs=0, minargs=0):
     @return args padded with None to maxargs.
     """
     if minargs is not None and len(args) < minargs:
-        raise UsageError("Not enough arguments, got %s need %s" % (len(args), minargs))
+        raise UsageError(f"Not enough arguments, got {len(args)} need {minargs}")
     if maxargs is not None and len(args) > maxargs:
-        raise UsageError("Unexpected arguments: %s" % (" ".join(args[maxargs:])))
+        raise UsageError(f'Unexpected arguments: {" ".join(args[maxargs:])}')
     return args + [None] * (maxargs - len(args))
 
 
@@ -218,7 +218,8 @@ def _skmanage_add_args(parser):
 
 
 def _skmanage_parser(operations):
-    description = "Standard operations: %s. Use GET-OPERATIONS to find additional operations." % (", ".join(operations))
+    description = f'Standard operations: {", ".join(operations)}. Use GET-OPERATIONS to find additional operations.'
+
     parser = _custom_optional_arguments_parser(prog="skmanage <operation>",
                                                parents=[common_parser],
                                                description=description)
@@ -262,10 +263,11 @@ def opts_sasl(opts):
     url = Url(opts.bus)
     mechs, user, password, sasl_password_file = opts.sasl_mechanisms, (opts.sasl_username or url.username), (opts.sasl_password or url.password), opts.sasl_password_file
 
-    if not (mechs or user or password or sasl_password_file):
-        return None
-
-    return Sasl(mechs, user, password, sasl_password_file)
+    return (
+        Sasl(mechs, user, password, sasl_password_file)
+        if (mechs or user or password or sasl_password_file)
+        else None
+    )
 
 
 def opts_ssl_domain(opts, mode=SSLDomain.MODE_CLIENT):
@@ -274,7 +276,7 @@ def opts_ssl_domain(opts, mode=SSLDomain.MODE_CLIENT):
     """
 
     url = opts_url(opts)
-    if not url.scheme == "amqps":
+    if url.scheme != "amqps":
         return None
 
     certificate, key, trustfile, password, password_file, ssl_disable_peer_name_verify = opts.ssl_certificate,\

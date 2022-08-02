@@ -84,8 +84,7 @@ def handle(sock):
             print(e)
             break
         handle_events(conn, events)
-        data_to_send = conn.data_to_send()
-        if data_to_send:
+        if data_to_send := conn.data_to_send():
             sock.sendall(data_to_send)
 
 

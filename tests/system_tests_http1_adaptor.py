@@ -133,12 +133,9 @@ class Http1AdaptorManagementTest(TestCase):
 
         # will hit test timeout on failure:
         while True:
-            hconns = 0
             obj = e_mgmt.query(type=self.CONNECTION_TYPE,
                                attribute_names=["protocol"])
-            for item in obj.get_dicts():
-                if "http/1.x" in item["protocol"]:
-                    hconns += 1
+            hconns = sum("http/1.x" in item["protocol"] for item in obj.get_dicts())
             if hconns == 0:
                 break
             sleep(0.25)
@@ -238,7 +235,7 @@ class Http1AdaptorManagementTest(TestCase):
                 rd, _, _ = select.select([conn], [], [])
             except select.error as serror:
                 if serror[0] == errno.EINTR:
-                    print("ignoring interrupt from select(): %s" % str(serror))
+                    print(f"ignoring interrupt from select(): {str(serror)}")
                     continue
                 raise  # assuming fatal...
             if len(conn.recv(10)) == 0:
@@ -311,14 +308,18 @@ class Http1AdaptorOneRouterTest(Http1OneRouterTestBase,
         super().tearDownClass()
 
     def test_005_get_10(self):
-        client = HTTPConnection("127.0.0.1:%s" % self.http_listener10_port,
-                                timeout=TIMEOUT)
+        client = HTTPConnection(
+            f"127.0.0.1:{self.http_listener10_port}", timeout=TIMEOUT
+        )
+
         self._do_request(client, self.TESTS_10["GET"])
         client.close()
 
     def test_000_stats(self):
-        client = HTTPConnection("127.0.0.1:%s" % self.http_listener11_port,
-                                timeout=TIMEOUT)
+        client = HTTPConnection(
+            f"127.0.0.1:{self.http_listener11_port}", timeout=TIMEOUT
+        )
+
         self._do_request(client, self.TESTS_11["GET"])
         self._do_request(client, self.TESTS_11["POST"])
         client.close()
@@ -334,6 +335,7 @@ class Http1AdaptorOneRouterTest(Http1OneRouterTestBase,
 
         def assert_approximately_equal(a, b):
             self.assertTrue((abs(a - b) / a) < 0.1)
+
         if stats[0].get('direction') == 'out':
             self.assertEqual(stats[1].get('direction'), 'in')
             assert_approximately_equal(stats[0].get('bytesOut'), 1059)
@@ -465,10 +467,10 @@ class FakeHttpServerBase:
         self.conn, self.addr = self.listener.accept()
         self.do_connect()
         while True:
-            data = self.conn.recv(bufsize)
-            if not data:
+            if data := self.conn.recv(bufsize):
+                self.do_data(data)
+            else:
                 break
-            self.do_data(data)
         self.do_close()
 
     def do_connect(self):
@@ -557,19 +559,19 @@ class Http1AdaptorBadEndpointsTest(TestCase,
         Test various improperly constructed request messages
         """
         with TestServer.new_server(server_port=self.http_server_port,
-                                   client_port=self.http_listener_port,
-                                   tests={}) as server:
+                                       client_port=self.http_listener_port,
+                                       tests={}) as server:
 
             body_filler = "?" * 1024 * 300  # Q2
 
-            msg = Message(body="NOMSGID " + body_filler)
+            msg = Message(body=f"NOMSGID {body_filler}")
             ts = AsyncTestSender(address=self.INT_A.listener,
                                  target="testServer",
                                  message=msg)
             ts.wait()
             self.assertEqual(1, ts.rejected)
 
-            msg = Message(body="NO REPLY TO " + body_filler)
+            msg = Message(body=f"NO REPLY TO {body_filler}")
             msg.id = 1
             ts = AsyncTestSender(address=self.INT_A.listener,
                                  target="testServer",
@@ -577,7 +579,7 @@ class Http1AdaptorBadEndpointsTest(TestCase,
             ts.wait()
             self.assertEqual(1, ts.rejected)
 
-            msg = Message(body="NO SUBJECT " + body_filler)
+            msg = Message(body=f"NO SUBJECT {body_filler}")
             msg.id = 1
             msg.reply_to = "amqp://fake/reply_to"
             ts = AsyncTestSender(address=self.INT_A.listener,
@@ -586,7 +588,7 @@ class Http1AdaptorBadEndpointsTest(TestCase,
             ts.wait()
             self.assertEqual(1, ts.rejected)
 
-            msg = Message(body="NO APP PROPERTIES " + body_filler)
+            msg = Message(body=f"NO APP PROPERTIES {body_filler}")
             msg.id = 1
             msg.reply_to = "amqp://fake/reply_to"
             msg.subject = "GET"
@@ -596,17 +598,17 @@ class Http1AdaptorBadEndpointsTest(TestCase,
             ts.wait()
             self.assertEqual(1, ts.rejected)
 
-            # TODO: fix body parsing (returns NEED_MORE)
-            # msg = Message(body="INVALID BODY " + body_filler)
-            # msg.id = 1
-            # msg.reply_to = "amqp://fake/reply_to"
-            # msg.subject = "GET"
-            # msg.properties = {"http:target": "/Some/target"}
-            # ts = AsyncTestSender(address=self.INT_A.listener,
-            #                      target="testServer",
-            #                      message=msg)
-            # ts.wait()
-            # self.assertEqual(1, ts.rejected);
+                # TODO: fix body parsing (returns NEED_MORE)
+                # msg = Message(body="INVALID BODY " + body_filler)
+                # msg.id = 1
+                # msg.reply_to = "amqp://fake/reply_to"
+                # msg.subject = "GET"
+                # msg.properties = {"http:target": "/Some/target"}
+                # ts = AsyncTestSender(address=self.INT_A.listener,
+                #                      target="testServer",
+                #                      message=msg)
+                # ts.wait()
+                # self.assertEqual(1, ts.rejected);
 
         # verify router is still sane:
         count, error = http1_ping(self.http_server_port,
@@ -639,7 +641,7 @@ class Http1AdaptorBadEndpointsTest(TestCase,
         client = ThreadedTestClient(DUMMY_TESTS,
                                     self.http_fake_port)
         req = rx.queue.get(timeout=TIMEOUT)
-        resp = Message(body="NO CORRELATION ID " + body_filler)
+        resp = Message(body=f"NO CORRELATION ID {body_filler}")
         resp.to = req.reply_to
         ts = AsyncTestSender(address=self.INT_A.listener,
                              target=req.reply_to,
@@ -654,7 +656,7 @@ class Http1AdaptorBadEndpointsTest(TestCase,
                                     self.http_fake_port)
         req = rx.queue.get(timeout=TIMEOUT)
 
-        resp = Message(body="NO APPLICATION PROPS " + body_filler)
+        resp = Message(body=f"NO APPLICATION PROPS {body_filler}")
         resp.to = req.reply_to
         resp.correlation_id = req.id
         ts = AsyncTestSender(address=self.INT_A.listener,
@@ -669,7 +671,7 @@ class Http1AdaptorBadEndpointsTest(TestCase,
         client = ThreadedTestClient(DUMMY_TESTS,
                                     self.http_fake_port)
         req = rx.queue.get(timeout=TIMEOUT)
-        resp = Message(body="MISSING STATUS HEADER " + body_filler)
+        resp = Message(body=f"MISSING STATUS HEADER {body_filler}")
         resp.to = req.reply_to
         resp.correlation_id = req.id
         resp.properties = {"stuff": "value"}
@@ -772,7 +774,7 @@ class Http1AdaptorQ2Standalone(TestCase):
                 _, rw, _ = select.select([], [sock], [], timeout)
             except select.error as serror:
                 if serror[0] == errno.EINTR:
-                    print("ignoring interrupt from select(): %s" % str(serror))
+                    print(f"ignoring interrupt from select(): {str(serror)}")
                     continue
                 raise  # assuming fatal...
             if rw:
@@ -793,7 +795,7 @@ class Http1AdaptorQ2Standalone(TestCase):
                 rd, _, _ = select.select([sock], [], [], timeout)
             except select.error as serror:
                 if serror[0] == errno.EINTR:
-                    print("ignoring interrupt from select(): %s" % str(serror))
+                    print(f"ignoring interrupt from select(): {str(serror)}")
                     continue
                 raise  # assuming fatal...
             if rd:
@@ -810,10 +812,10 @@ class Http1AdaptorQ2Standalone(TestCase):
         unblock_line = 0
         with open(log_file) as f:
             for line_no, line in enumerate(f, start=1):
-                if '%s link blocked on Q2 limit' % prefix in line:
+                if f'{prefix} link blocked on Q2 limit' in line:
                     block_ct += 1
                     block_line = line_no
-                if '%s link unblocked from Q2 limit' % prefix in line:
+                if f'{prefix} link unblocked from Q2 limit' in line:
                     unblock_ct += 1
                     unblock_line = line_no
         self.assertGreater(block_ct, 0)

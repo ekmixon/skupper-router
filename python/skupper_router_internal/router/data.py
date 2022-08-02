@@ -251,11 +251,11 @@ class MessageLSR:
         if body:
             self.id = getMandatory(body, 'id', str)
             self.version = getOptional(body, 'pv', 0, int)
-            self.area = '0'
         else:
             self.id = _id
             self.version = ProtocolVersion
-            self.area = '0'
+
+        self.area = '0'
 
     def get_opcode(self):
         return 'LSR'
@@ -297,20 +297,12 @@ class MessageMAU:
         return 'MAU'
 
     def __repr__(self):
-        _add = ''
-        _del = ''
-        _exist = ''
-        _hints = ''
-        if self.add_list is not None:
-            _add   = ' add=%r'   % self.add_list
-        if self.del_list is not None:
-            _del   = ' del=%r'   % self.del_list
-        if self.exist_list is not None:
-            _exist = ' exist=%r' % self.exist_list
-        if self.hints is not None:
-            _hints = ' hints=%r' % self.hints
+        _add = ' add=%r'   % self.add_list if self.add_list is not None else ''
+        _del = ' del=%r'   % self.del_list if self.del_list is not None else ''
+        _exist = ' exist=%r' % self.exist_list if self.exist_list is not None else ''
+        _hints = ' hints=%r' % self.hints if self.hints is not None else ''
         return "MAU(id=%s pv=%d area=%s mobile_seq=%d%s%s%s%s)" % \
-            (self.id, self.version, self.area, self.mobile_seq, _add, _del, _exist, _hints)
+                (self.id, self.version, self.area, self.mobile_seq, _add, _del, _exist, _hints)
 
     def to_dict(self):
         body = {'id'         : self.id,

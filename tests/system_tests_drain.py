@@ -186,17 +186,16 @@ class ReceiverDropsOffSenderDrain(MessagingHandler):
                 self.receiver_closed = True
 
     def on_link_opened(self, event):
-        if self.sender_drained:
-            if event.receiver == self.receiver:
-                self.sec_recv_link_opened = True
+        if self.sender_drained and event.receiver == self.receiver:
+            self.sec_recv_link_opened = True
 
-                if self.num_msgs < 3:
-                    # Send a message after the sender has been drained
-                    # and a new receiver has been created
-                    # and make sure that the message has reached the receiver
-                    self.num_msgs += 1
-                    msg = Message(body={'number': 3})
-                    self.sender.send(msg)
+            if self.num_msgs < 3:
+                # Send a message after the sender has been drained
+                # and a new receiver has been created
+                # and make sure that the message has reached the receiver
+                self.num_msgs += 1
+                msg = Message(body={'number': 3})
+                self.sender.send(msg)
 
     def on_link_closed(self, event):
         if event.receiver == self.receiver:
@@ -210,22 +209,21 @@ class ReceiverDropsOffSenderDrain(MessagingHandler):
             self.sender.send(msg)
 
     def on_link_flow(self, event):
-        if self.receiver_closed:
-            if event.sender:
-                self.drained = event.sender.drained()
-                if self.drained == self.expected_drained:
-                    # The sender has been drained. Now create another receiver
-                    # to the same address as the sender
-                    # and use the sender to send a message to see
-                    # if flow is re-issued by the router to the sender and if
-                    # the message reaches this newly created receiver
-                    self.sender_drained = True
+        if self.receiver_closed and event.sender:
+            self.drained = event.sender.drained()
+            if self.drained == self.expected_drained:
+                # The sender has been drained. Now create another receiver
+                # to the same address as the sender
+                # and use the sender to send a message to see
+                # if flow is re-issued by the router to the sender and if
+                # the message reaches this newly created receiver
+                self.sender_drained = True
 
-                    # Create a new receiver
-                    self.receiver = event.container.create_receiver(
-                        self.receiver_conn,
-                        self.dest,
-                        name="A")
+                # Create a new receiver
+                self.receiver = event.container.create_receiver(
+                    self.receiver_conn,
+                    self.dest,
+                    name="A")
 
     def run(self):
         Container(self).run()

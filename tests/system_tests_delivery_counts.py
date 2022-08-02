@@ -50,10 +50,7 @@ def _link_stats_are_zero(statistics, keys):
     """
     Verify that all statistics whose keys are present are zero
     """
-    for key in keys:
-        if statistics.get(key) != 0:
-            return False
-    return True
+    return all(statistics.get(key) == 0 for key in keys)
 
 
 class OneRouterModifiedTest(TestCase):
@@ -350,11 +347,10 @@ class LargePresettledLinkCounterTest(MessagingHandler):
             self.sender = self.container.create_sender(self.sender_conn,
                                                        self.dest,
                                                        name='SenderA')
-        else:
-            if self.num_attempts < 2:
-                self.address_check_timer = self.reactor.schedule(2,
-                                                                 AddressCheckerTimeout(self))
-                self.num_attempts += 1
+        elif self.num_attempts < 2:
+            self.address_check_timer = self.reactor.schedule(2,
+                                                             AddressCheckerTimeout(self))
+            self.num_attempts += 1
 
     def timeout(self):
         self.error = "Timeout Expired: self.n_sent=%d, self.self.n_received=%d  " % (self.n_sent, self.n_received)
@@ -450,10 +446,9 @@ class LargePresettledReleasedLinkCounterTest(MessagingHandler):
             self.sender = self.container.create_sender(self.sender_conn,
                                                        self.dest,
                                                        name='SenderA')
-        else:
-            if self.num_attempts < 2:
-                self.address_check_timer = self.reactor.schedule(2, AddressCheckerTimeout(self))
-                self.num_attempts += 1
+        elif self.num_attempts < 2:
+            self.address_check_timer = self.reactor.schedule(2, AddressCheckerTimeout(self))
+            self.num_attempts += 1
 
     def timeout(self):
         self.error = "Timeout Expired: self.n_sent=%d, self.self.n_received=%d  " % (self.n_sent, self.n_received)
@@ -853,11 +848,11 @@ class OneRouterLinkCountersTest(TestCase):
             self.presettled = presettled
             self.outcome = outcome
             self.count = OneRouterLinkCountersTest.COUNT \
-                if count is None else count
+                        if count is None else count
             self.credit = OneRouterLinkCountersTest.COUNT \
-                if credit is None else credit
+                        if credit is None else credit
             self.rx_limit = OneRouterLinkCountersTest.COUNT \
-                if rx_limit is None else rx_limit
+                        if rx_limit is None else rx_limit
 
             self.sent = 0
             self.received = 0
@@ -898,7 +893,7 @@ class OneRouterLinkCountersTest(TestCase):
             restart_poll_timer = True
             self._get_sender_receiver_stats()
             if self.receiver_stats and self.outcome == Delivery.RELEASED and \
-                    self.receiver_stats['releasedCount'] == self.rx_limit:
+                            self.receiver_stats['releasedCount'] == self.rx_limit:
                 if self.sender_stats and self.sender_stats['releasedCount'] == self.rx_limit:
                     # We do not want to check just the deliveryCount here. The deliveryCount gets
                     # updated much earlier than the releasedCount. We will check the releasedCount instead.
@@ -907,7 +902,7 @@ class OneRouterLinkCountersTest(TestCase):
                     restart_poll_timer = False
                     self._cleanup()
             elif self.receiver_stats and self.receiver_stats['deliveryCount'] == self.rx_limit\
-                    and self.sender_stats and self.sender_stats['deliveryCount'] == self.count:
+                            and self.sender_stats and self.sender_stats['deliveryCount'] == self.count:
                 restart_poll_timer = False
                 self._cleanup()
 

@@ -47,10 +47,10 @@ class FailoverTest(TestCase):
         cls.inter_router_port = cls.tester.get_port()
         cls.inter_router_port_1 = cls.tester.get_port()
         cls.backup_port = cls.tester.get_port()
-        cls.backup_url = 'amqp://0.0.0.0:' + str(cls.backup_port)
+        cls.backup_url = f'amqp://0.0.0.0:{str(cls.backup_port)}'
         cls.my_server_port = cls.tester.get_port()
 
-        cls.failover_list = 'amqp://third-host:5671, ' + cls.backup_url
+        cls.failover_list = f'amqp://third-host:5671, {cls.backup_url}'
 
         #
         # Router A tries to connect to Router B via its connectorToB. Router B responds with an open frame which will
@@ -114,13 +114,24 @@ class FailoverTest(TestCase):
 
     def run_skstat(self, args, regexp=None, address=None, expect=Process.EXIT_OK):
         p = self.popen(
-            ['skstat', '--bus', str(address or self.router.addresses[0]), '--timeout', str(TIMEOUT)] + args,
-            name='skstat-' + self.id(), stdout=PIPE, expect=expect,
-            universal_newlines=True)
+            [
+                'skstat',
+                '--bus',
+                str(address or self.router.addresses[0]),
+                '--timeout',
+                str(TIMEOUT),
+            ]
+            + args,
+            name=f'skstat-{self.id()}',
+            stdout=PIPE,
+            expect=expect,
+            universal_newlines=True,
+        )
+
 
         out = p.communicate()[0]
         assert p.returncode == 0, \
-            "skstat exit status %s, output:\n%s" % (p.returncode, out)
+                "skstat exit status %s, output:\n%s" % (p.returncode, out)
         if regexp:
             assert re.search(regexp, out, re.I), "Can't find '%s' in '%s'" % (regexp, out)
         return out
@@ -135,25 +146,28 @@ class FailoverTest(TestCase):
         The 'failoverUrls' is comma separated.
         """
         long_type = 'io.skupper.router.connector'
-        query_command = 'QUERY --type=' + long_type
+        query_command = f'QUERY --type={long_type}'
         output = json.loads(self.run_skmanage(query_command))
-        expected = "amqp://127.0.0.1:" + str(FailoverTest.inter_router_port) + ", " + FailoverTest.failover_list
+        expected = f"amqp://127.0.0.1:{str(FailoverTest.inter_router_port)}, {FailoverTest.failover_list}"
+
 
         self.assertEqual(expected, output[0]['failoverUrls'])
 
     def schedule_B_to_C_failover_test(self):
-        if self.attempts < self.max_attempts:
-            if not self.success:
-                Timer(self.timer_delay, self.check_C_connector).start()
-                self.attempts += 1
+        if self.attempts < self.max_attempts and not self.success:
+            Timer(self.timer_delay, self.check_C_connector).start()
+            self.attempts += 1
 
     def check_C_connector(self):
         long_type = 'io.skupper.router.connector'
-        query_command = 'QUERY --type=' + long_type
+        query_command = f'QUERY --type={long_type}'
         output = json.loads(self.run_skmanage(query_command, address=self.routers[1].addresses[0]))
 
-        expected = FailoverTest.backup_url  + ", " + "amqp://127.0.0.1:" + str(FailoverTest.inter_router_port) \
-            + ", " + "amqp://third-host:5671"
+        expected = (
+            f"{FailoverTest.backup_url}, amqp://127.0.0.1:{str(FailoverTest.inter_router_port)}"
+            + ", "
+        ) + "amqp://third-host:5671"
+
 
         if output[0].get('failoverUrls') == expected:
             self.success = True
@@ -161,13 +175,7 @@ class FailoverTest(TestCase):
             self.schedule_B_to_C_failover_test()
 
     def can_terminate(self):
-        if self.attempts == self.max_attempts:
-            return True
-
-        if self.success:
-            return True
-
-        return False
+        return True if self.attempts == self.max_attempts else bool(self.success)
 
     def test_2_remove_router_B(self):
         """
@@ -196,23 +204,24 @@ class FailoverTest(TestCase):
         self.assertTrue(self.success)
 
     def schedule_C_to_B_failover_test(self):
-        if self.attempts < self.max_attempts:
-            if not self.success:
-                Timer(self.timer_delay, self.check_B_connector).start()
-                self.attempts += 1
+        if self.attempts < self.max_attempts and not self.success:
+            Timer(self.timer_delay, self.check_B_connector).start()
+            self.attempts += 1
 
     def check_B_connector(self):
         # Router A should now try to connect to Router B again since we killed Router C.
         long_type = 'io.skupper.router.connector'
-        query_command = 'QUERY --type=' + long_type
+        query_command = f'QUERY --type={long_type}'
         output = json.loads(self.run_skmanage(query_command, address=self.routers[1].addresses[0]))
 
         # The order that the URLs appear in the failoverUrls is important. This is the order in which the router
         # will attempt to make connections in case the existing connection goes down.
 
-        expected = "amqp://127.0.0.1:" + str(FailoverTest.inter_router_port) + ", " + \
-                   FailoverTest.failover_list + \
-                   ', amqp://127.0.0.1:%d' % FailoverTest.my_server_port
+        expected = (
+            f"amqp://127.0.0.1:{str(FailoverTest.inter_router_port)}, "
+            + FailoverTest.failover_list
+        ) + ', amqp://127.0.0.1:%d' % FailoverTest.my_server_port
+
 
         if output[0].get('failoverUrls') == expected:
             self.success = True
@@ -257,7 +266,7 @@ class FailoverTest(TestCase):
     def check_A_connector(self):
         # Router A should now try to connect to Router B again since we killed Router C.
         long_type = 'io.skupper.router.connector'
-        query_command = 'QUERY --type=' + long_type
+        query_command = f'QUERY --type={long_type}'
         output = json.loads(self.run_skmanage(query_command, address=self.routers[1].addresses[0]))
 
         # The order that the URLs appear in the failoverUrls is important. This is the order in which the router
@@ -270,10 +279,9 @@ class FailoverTest(TestCase):
             self.schedule_B_to_my_server_failover_test()
 
     def schedule_B_to_my_server_failover_test(self):
-        if self.attempts < self.max_attempts:
-            if not self.success:
-                Timer(self.timer_delay, self.check_A_connector).start()
-                self.attempts += 1
+        if self.attempts < self.max_attempts and not self.success:
+            Timer(self.timer_delay, self.check_A_connector).start()
+            self.attempts += 1
 
     def test_4_remove_router_B_connect_to_my_server(self):
         """

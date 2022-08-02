@@ -46,11 +46,21 @@ class CommandLineTest(TestCase):
         cls.name = "test-router-1"
         CommandLineTest.testname = cls.name
         CommandLineTest.testport = cls.tester.get_port()
-        cls.config = Qdrouterd.Config([
-            ('router', {'mode': 'standalone', 'id': CommandLineTest.name}),
-            ('listener', {'port': CommandLineTest.testport}),
-            ('log', {'module': 'DEFAULT', 'enable': 'trace+', 'includeSource': 'true', 'outputFile': os.getcwd() + "/" + CommandLineTest.name + '.log'})
-        ])
+        cls.config = Qdrouterd.Config(
+            [
+                ('router', {'mode': 'standalone', 'id': CommandLineTest.name}),
+                ('listener', {'port': CommandLineTest.testport}),
+                (
+                    'log',
+                    {
+                        'module': 'DEFAULT',
+                        'enable': 'trace+',
+                        'includeSource': 'true',
+                        'outputFile': f"{os.getcwd()}/{CommandLineTest.name}.log",
+                    },
+                ),
+            ]
+        )
 
     def run_router_as_daemon(self, config_file_name, pid_file_name):
         """
@@ -88,7 +98,7 @@ class CommandLineTest(TestCase):
         """
 
         try:
-            self.run_router_as_daemon("test-router", os.getcwd() + '/test.pid')
+            self.run_router_as_daemon("test-router", f'{os.getcwd()}/test.pid')
         except OSError as ex:
             self.fail(ex)
 
@@ -109,11 +119,24 @@ class CommandLineTest2(TestCase):
         CommandLineTest2.testname = cls.name
         CommandLineTest2.testport = cls.tester.get_port()
         # output has been deprecated. We are using it here to test backward compatibility.
-        cls.config = Qdrouterd.Config([
-            ('router', {'mode': 'standalone', 'id': CommandLineTest2.testname}),
-            ('listener', {'port': CommandLineTest2.testport}),
-            ('log', {'module': 'DEFAULT', 'enable': 'trace+', 'includeSource': 'true', 'outputFile': os.getcwd() + "/" + CommandLineTest2.name + '.log'})
-        ])
+        cls.config = Qdrouterd.Config(
+            [
+                (
+                    'router',
+                    {'mode': 'standalone', 'id': CommandLineTest2.testname},
+                ),
+                ('listener', {'port': CommandLineTest2.testport}),
+                (
+                    'log',
+                    {
+                        'module': 'DEFAULT',
+                        'enable': 'trace+',
+                        'includeSource': 'true',
+                        'outputFile': f"{os.getcwd()}/{CommandLineTest2.name}.log",
+                    },
+                ),
+            ]
+        )
 
     def run_router_as_daemon(self, config_file_name, pid_file_name):
         """
@@ -151,8 +174,11 @@ class CommandLineTest2(TestCase):
         """
 
         try:
-            self.run_router_as_daemon(os.getcwd() + "/test-router-2.conf",
-                                      pid_file_name=os.getcwd() + '/test.pid')
+            self.run_router_as_daemon(
+                f"{os.getcwd()}/test-router-2.conf",
+                pid_file_name=f'{os.getcwd()}/test.pid',
+            )
+
         except OSError as ex:
             self.fail(ex)
 

@@ -175,47 +175,44 @@ class InteriorSyncUpTest(MessagingHandler):
                 self.last_action = "started probe expecting addresses not found"
 
     def on_message(self, event):
-        if event.receiver == self.probe_receiver:
+        if event.receiver != self.probe_receiver:
+            return
+        response = self.proxy.response(event.message)
+
+        if response.status_code < 200 or response.status_code > 299:
+            self.fail("Unexpected operation failure: (%d) %s" % (response.status_code, response.status_description))
+
+        if self.expect == "not-found":
             response = self.proxy.response(event.message)
+            for addr in response.results:
+                if "address." in addr.name:
+                    self.fail("Found address on host-a when we didn't expect it - %s" % addr.name)
 
-            if response.status_code < 200 or response.status_code > 299:
-                self.fail("Unexpected operation failure: (%d) %s" % (response.status_code, response.status_description))
+            ##
+            # Hook up the two routers to start the sync-up
+            ##
+            self.probe_sender.send(self.proxy.create_connector("IR", port=self.inter_router_port, role="inter-router"))
+            self.expect      = "create-success"
+            self.last_action = "created inter-router connector"
 
-            if self.expect == "not-found":
-                response = self.proxy.response(event.message)
-                for addr in response.results:
-                    if "address." in addr.name:
-                        self.fail("Found address on host-a when we didn't expect it - %s" % addr.name)
+        elif self.expect == "create-success":
+            ##
+            # Start polling for the addresses on host_a
+            ##
+            response  = self.proxy.response(event.message)
+            self.probe_sender.send(self.proxy.query_addresses())
+            self.expect      = "query-success"
+            self.last_action = "started probing host_a for addresses"
 
-                ##
-                # Hook up the two routers to start the sync-up
-                ##
-                self.probe_sender.send(self.proxy.create_connector("IR", port=self.inter_router_port, role="inter-router"))
-                self.expect      = "create-success"
-                self.last_action = "created inter-router connector"
+        elif self.expect == "query-success":
+            response  = self.proxy.response(event.message)
+            got_count = sum("address." in addr.name for addr in response.results)
+            self.last_action = "Got a query response with %d of the expected addresses" % (got_count)
 
-            elif self.expect == "create-success":
-                ##
-                # Start polling for the addresses on host_a
-                ##
-                response  = self.proxy.response(event.message)
-                self.probe_sender.send(self.proxy.query_addresses())
-                self.expect      = "query-success"
-                self.last_action = "started probing host_a for addresses"
-
-            elif self.expect == "query-success":
-                response  = self.proxy.response(event.message)
-                got_count = 0
-                for addr in response.results:
-                    if "address." in addr.name:
-                        got_count += 1
-
-                self.last_action = "Got a query response with %d of the expected addresses" % (got_count)
-
-                if got_count == self.count:
-                    self.fail(None)
-                else:
-                    self.poll_timer = self.reactor.schedule(0.5, PollTimeout(self))
+            if got_count == self.count:
+                self.fail(None)
+            else:
+                self.poll_timer = self.reactor.schedule(0.5, PollTimeout(self))
 
     def run(self):
         container = Container(self)

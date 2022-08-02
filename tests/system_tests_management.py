@@ -19,6 +19,7 @@
 
 """System tests for management of qdrouter"""
 
+
 import json
 import os
 import re
@@ -39,23 +40,21 @@ from system_test import Qdrouterd, Process
 from system_test import unittest
 
 PREFIX = 'io.skupper.router.'
-MANAGEMENT = PREFIX + 'management'
-CONFIGURATION = PREFIX + 'configurationEntity'
-OPERATIONAL = PREFIX + 'operationalEntity'
-LISTENER = PREFIX + 'listener'
-CONNECTOR = PREFIX + 'connector'
-DUMMY = PREFIX + 'dummy'
-ROUTER = PREFIX + 'router'
-LINK = ROUTER + '.link'
-ADDRESS = ROUTER + '.address'
-NODE = ROUTER + '.node'
-CONFIG_ADDRESS = ROUTER + '.config.address'
+MANAGEMENT = f'{PREFIX}management'
+CONFIGURATION = f'{PREFIX}configurationEntity'
+OPERATIONAL = f'{PREFIX}operationalEntity'
+LISTENER = f'{PREFIX}listener'
+CONNECTOR = f'{PREFIX}connector'
+DUMMY = f'{PREFIX}dummy'
+ROUTER = f'{PREFIX}router'
+LINK = f'{ROUTER}.link'
+ADDRESS = f'{ROUTER}.address'
+NODE = f'{ROUTER}.node'
+CONFIG_ADDRESS = f'{ROUTER}.config.address'
 
 
 def short_name(name):
-    if name.startswith(PREFIX):
-        return name[len(PREFIX):]
-    return name
+    return name[len(PREFIX):] if name.startswith(PREFIX) else name
 
 
 class ManagementTest(system_test.TestCase):
@@ -147,14 +146,15 @@ class ManagementTest(system_test.TestCase):
             self.assertEqual(len(response.attribute_names), len(r))
             self.assertEqual(r['type'], LISTENER)
         self.assertTrue(
-            {'l0', 'l1', 'l2'} <= set(r['name'] for r in response.get_entities()))
+            {'l0', 'l1', 'l2'} <= {r['name'] for r in response.get_entities()}
+        )
 
     def test_query_type_attributes(self):
         """Query with type and attribute names"""
         attribute_names = ['type', 'name', 'port']
         response = self.node.query(type=LISTENER, attribute_names=attribute_names)
         self.assertEqual(attribute_names, response.attribute_names)
-        expect = [[LISTENER, 'l%s' % i, str(self.router.ports[i])] for i in range(3)]
+        expect = [[LISTENER, f'l{i}', str(self.router.ports[i])] for i in range(3)]
         for r in expect:  # We might have extras in results due to create tests
             self.assertIn(r, response.results)
             self.assertIn(dict(zip(attribute_names, r)), response.get_dicts())
@@ -164,17 +164,19 @@ class ManagementTest(system_test.TestCase):
         attribute_names = ['type', 'name', 'port']
         response = self.node.query(attribute_names=attribute_names)
         self.assertEqual(attribute_names, response.attribute_names)
-        expect = [[LISTENER, 'l%s' % i, str(self.router.ports[i])] for i in range(3)]
+        expect = [[LISTENER, f'l{i}', str(self.router.ports[i])] for i in range(3)]
         for r in expect:  # We might have extras in results due to create tests
             self.assertIn(r, response.results)
-        for name in ['router/' + self.router.name, 'log/DEFAULT']:
+        for name in [f'router/{self.router.name}', 'log/DEFAULT']:
             self.assertTrue([r for r in response.get_dicts() if r['name'] == name],
                             msg="Can't find result with name '%s'" % name)
 
     def assertMapSubset(self, small, big):
         """Assert that mapping small is a subset of mapping big"""
         missing = [(k, v) for k, v in small.items() if (k, v) not in big.items()]
-        assert not missing, "Not a subset, missing %s, sub=%s, super=%s" % (missing, small, big)
+        assert (
+            not missing
+        ), f"Not a subset, missing {missing}, sub={small}, super={big}"
 
     def assert_create_ok(self, type, name, attributes):
         entity = self.node.create(attributes, type, name)
@@ -240,7 +242,7 @@ class ManagementTest(system_test.TestCase):
 
         def update_check_log(attributes, error=True, debug=False):
             log_count[0] += 1
-            log = os.path.abspath("test_log.log%s" % log_count[0])
+            log = os.path.abspath(f"test_log.log{log_count[0]}")
             attributes["outputFile"] = log
             attributes["identity"] = "log/AGENT"
             node.update(attributes)
@@ -309,7 +311,9 @@ class ManagementTest(system_test.TestCase):
         self.assertEqual(str(self.router.ports[0]), entity.port)
 
         entity = self.node.read(
-            type=LISTENER, identity='listener/0.0.0.0:%s:l1' % self.router.ports[1])
+            type=LISTENER, identity=f'listener/0.0.0.0:{self.router.ports[1]}:l1'
+        )
+
         self.assertEqual('l1', entity.name)
         self.assertEqual(str(self.router.ports[1]), entity.port)
 
@@ -396,10 +400,10 @@ class ManagementTest(system_test.TestCase):
 
         def check(attrs):
             name = attrs['id']
-            self.assertEqual(attrs['identity'], 'router.node/%s' % name)
-            self.assertEqual(attrs['name'], 'router.node/%s' % name)
+            self.assertEqual(attrs['identity'], f'router.node/{name}')
+            self.assertEqual(attrs['name'], f'router.node/{name}')
             self.assertEqual(attrs['type'], 'io.skupper.router.router.node')
-            self.assertEqual(attrs['address'], 'amqp:/_topo/0/%s' % name)
+            self.assertEqual(attrs['address'], f'amqp:/_topo/0/{name}')
             return name
 
         self.assertEqual({"router0", "router1", "router2"}, {check(n) for n in rnode_lists[0]})
@@ -414,19 +418,21 @@ class ManagementTest(system_test.TestCase):
         for e in entities:
             if e.type == MANAGEMENT:
                 self.assertEqual(e.identity, "self")
+            elif e.type == 'io.skupper.router.connection':
+                # This will make sure that the identity of the connection object is always numeric
+                self.assertRegex(str(e.identity), "[1-9]+", e)
             else:
-                if e.type == 'io.skupper.router.connection':
-                    # This will make sure that the identity of the connection object is always numeric
-                    self.assertRegex(str(e.identity), "[1-9]+", e)
-                else:
-                    self.assertRegex(e.identity, "^%s/" % short_name(e.type), e)
+                self.assertRegex(e.identity, f"^{short_name(e.type)}/", e)
 
     def test_remote_node(self):
         """Test that we can access management info of remote nodes using get_mgmt_nodes addresses"""
         nodes = [self.cleanup(Node.connect(Url(r.addresses[0]))) for r in self.routers]
-        remotes = sum([n.get_mgmt_nodes() for n in nodes], [])
-        self.assertEqual({'amqp:/_topo/0/router%s/$management' % i for i in [0, 1, 2]},
-                         set(remotes))
+        remotes = sum((n.get_mgmt_nodes() for n in nodes), [])
+        self.assertEqual(
+            {f'amqp:/_topo/0/router{i}/$management' for i in [0, 1, 2]},
+            set(remotes),
+        )
+
         self.assertEqual(9, len(remotes))
         # Query router2 indirectly via router1
         remote_url = Url(self.routers[0].addresses[0], path=Url(remotes[0]).path)
@@ -515,7 +521,7 @@ class SimpleSndRecv(MessagingHandler):
         event.sender.send(msg)
 
     def on_message(self, event):
-        if "Hello World" == event.message.body:
+        if event.message.body == "Hello World":
             self.message_received = True
             self.conn.close()
 

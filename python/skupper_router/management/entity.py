@@ -32,9 +32,11 @@ def clean_dict(items, **kwargs):
     """
     if isinstance(items, dict):
         items = items.items()
-    return dict((k, v)
-                for k, v in itertools.chain(items, kwargs.items())
-                if v is not None)
+    return {
+        k: v
+        for k, v in itertools.chain(items, kwargs.items())
+        if v is not None
+    }
 
 
 class EntityBase:
@@ -105,7 +107,7 @@ class EntityBase:
         # lower priority than special
         keys = sorted(self.attributes.keys(),
                       key=lambda k: self._SPECIAL.get(k, 3))
-        return "Entity(%s)" % ", ".join("%s=%s" % (k, self.attributes[k]) for k in keys)
+        return f'Entity({", ".join(f"{k}={self.attributes[k]}" for k in keys)})'
 
 
 def update(entity, values):
